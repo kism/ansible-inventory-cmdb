@@ -1,0 +1,144 @@
+import logging
+import os
+import pickle
+import re
+from pprint import pformat
+from urllib.parse import urlparse
+
+import requests
+import yaml
+
+logger = logging.getLogger(__name__)
+
+CACHE_FILE = "instance" + os.sep + "cache.pkl"
+
+
+class AnsibleCMDB:
+    def __init__(self, inventory_url: str):
+        self.inventory_url = inventory_url
+
+        self.url_cache: dict = {}
+        if os.path.isfile(CACHE_FILE):
+            with open(CACHE_FILE, "rb") as cache_file:
+                self.url_cache = pickle.load(cache_file)
+
+        if not self.url_cache:
+            self.url_cache = {}
+
+        self.base_url = re.sub(r"/inventory.*", "", self.inventory_url)
+        self._build_cmdb()
+        self._build_cmdb_groups()
+
+        logger.debug(f"CMDB: {pformat(self.inventory)}")
+
+        with open("instance" + os.sep + "cmdb.yml", "w") as cmdb_file:
+            yaml.dump(self.inventory, cmdb_file)
+
+    def get(self):
+        return self.inventory
+
+    def get_group(self, group: str):
+        return self.groups[group]
+
+    def _build_cmdb_groups(self):
+        self.groups = {}
+        for group in self.inventory_yaml:
+            self.groups[group] = {}
+
+        for group in self.groups:
+            self._set_group_vars(group, self.groups[group])
+
+
+    def _build_cmdb(self):
+        """Build the CMDB from the inventory."""
+        self.inventory_yaml = self._get_yaml(self.inventory_url)
+
+        hosts = {}
+        for group in self.inventory_yaml:
+            for host in self.inventory_yaml[group]["hosts"]:
+                hosts[host] = {"groups": [], "vars": {}}
+
+        self.inventory = hosts
+
+
+
+        for host in hosts:
+            hosts[host]["groups"] = self._get_groups_of_host(host)
+
+
+
+        for host in hosts:
+            self._set_host_vars(host, hosts[host]["vars"])
+
+        # Get the inline vars for each host
+        for host in hosts:
+            self._set_host_vars_from_inventory(host)
+
+
+    def _set_host_vars_from_inventory(self, host: str):
+        """Set the vars of a host from the inventory."""
+        for group in self.inventory_yaml:
+            if host in self.inventory_yaml[group]["hosts"]:
+                if self.inventory_yaml[group]["hosts"][host]:
+                    for key, value in self.inventory_yaml[group]["hosts"][host].items():
+                        self.inventory[host]["vars"][key] = value
+
+
+
+    def _get_groups_of_host(self, host: str):
+        """Get the groups of a host."""
+        host_groups = []
+
+        for group in self.inventory_yaml:
+            if host in self.inventory_yaml[group]["hosts"]:
+                host_groups.append(group)
+
+        return host_groups
+
+    def _set_group_vars(self, group: str, group_vars: dict):
+        """Get the vars of a group."""
+
+        group_var_urls = [
+            f"{self.base_url}/group_vars/{group}.yml",
+            f"{self.base_url}/inventory/group_vars/{group}.yml",
+        ]
+
+        for group_var_url in group_var_urls:
+            group_yaml = self._get_yaml(group_var_url)
+
+            if group_yaml:
+                for key, value in group_yaml.items():
+                    group_vars[key] = value
+
+    def _set_host_vars(self, host: str, host_vars: dict):
+        """Get the vars of a host."""
+        host_var_urls = [
+            f"{self.base_url}/host_vars/{host}.yml",
+            f"{self.base_url}/inventory/host_vars/{host}.yml",
+        ]
+
+        for host_var_url in host_var_urls:
+            host_yaml = self._get_yaml(host_var_url)
+
+            if host_yaml:
+                for key, value in host_yaml.items():
+                    host_vars[key] = value
+
+    def _get_yaml(self, url: str):
+        """Get a yaml file from a URL."""
+        if url not in self.url_cache:
+            logger.info(f"Getting URL: {url}")
+            response = requests.get(url)
+
+            temp_text = "" if not response.ok else response.text
+
+            self.url_cache[url] = yaml.safe_load(temp_text)
+
+            with open(CACHE_FILE, "wb") as cache_file:
+                temp_yaml = dict(self.url_cache)
+                pickle.dump(self.url_cache, cache_file, pickle.HIGHEST_PROTOCOL)
+
+        else:
+            logger.info(f"Using cached URL: {url}")
+
+        return self.url_cache[url]

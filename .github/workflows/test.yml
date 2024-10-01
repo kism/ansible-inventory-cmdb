@@ -1,0 +1,47 @@
+---
+name: Test (PyTest)
+
+on:
+  push:
+    branches:
+      - main
+      - test
+
+jobs:
+  test_boilerplate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"] # Don't bother with beta versions, slow on github. https://github.com/actions/python-versions/releases
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run image
+        uses: abatilo/actions-poetry@v2
+
+      - name: Configure Poetry to install dependencies in virtualenv
+        run: |
+          poetry config virtualenvs.create true --local
+          poetry config virtualenvs.in-project true --local
+
+      - name: Define a cache for the virtual environment based on the dependencies lock file
+        uses: actions/cache@v4
+        with:
+          path: ./.venv
+          key: venv-${{ hashFiles('poetry.lock') }}
+
+      - name: Install dependencies
+        run: poetry install --without dev
+
+      - name: Test with pytest
+        run: .venv/bin/pytest --cov-report=xml # xml report needed for codecov, other settings from pyproject.toml
+
+      # - name: Upload coverage reports to Codecov
+      #   uses: codecov/codecov-action@v4.0.1
+      #   with:
+      #     token: ${{ secrets.CODECOV_TOKEN }}
