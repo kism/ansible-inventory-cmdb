@@ -2,7 +2,7 @@
 <html lang="en">
 
 <head>
-    <title>Hello World</title>
+    <title>{{ __app_nice_name }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="X-Clacks-Overhead" content="GNU Terry Pratchett" />
     <link rel="stylesheet" href="static/zy.css" />
@@ -18,7 +18,7 @@
             <tr>
                 {% for key, value in schema_mapping.items() %}<td>{{ host_vars['vars'][key] }}</td>{% endfor %}
                 <td><a href="/host/{{ host }}">{{ host }}</a></td>
-                <td>{% for group in host_vars['groups'] %}<a href="/group/{{ group }}">{{ group }}</a>, {% endfor %}</td>
+                <td>{% for group in host_vars['groups'] %}<a href="/group/{{ group }}">{{ group }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td>
             </tr>{% endfor %}
         </table>
     </main>
