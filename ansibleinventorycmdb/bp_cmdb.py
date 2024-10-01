@@ -47,7 +47,11 @@ def home() -> str:
         logger.info(f"Mapping: {mapping} -> {nice_text}")
 
     return render_template(
-        "home.html.j2", __app_nice_name="Ansible Inventory CMDB", cmdb=cmdb.get(), schema_mapping=schema_mapping
+        "home.html.j2",
+        __app_nice_name="Ansible Inventory CMDB",
+        cmdb=cmdb.get(),
+        schema_mapping=schema_mapping,
+        __from=cmdb.inventory_url,
     )  # Return a webpage
 
 
