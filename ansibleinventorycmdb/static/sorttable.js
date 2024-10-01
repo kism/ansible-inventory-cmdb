@@ -78,3 +78,5 @@ function sortTable(n) {
     }
   }
 }
+
+sortTable(1);

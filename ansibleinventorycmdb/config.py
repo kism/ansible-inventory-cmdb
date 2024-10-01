@@ -20,7 +20,7 @@ DEFAULT_CONFIG: dict[str, dict] = {
             "ansible_host": "Hostname",
             "target_host_ip_address": "IP Address",
             "target_host_mac_address": "MAC Address",
-            "proxmox_target_node": "Proxmox Node",
+            "proxmox_target_node": "PVE Node",
             "ansible_host_description": "Description",
         },
     },

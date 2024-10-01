@@ -278,6 +278,7 @@ td {
   border-bottom: 1px solid black;
   padding: 16px;
   vertical-align: inherit;
+  text-align: left;
 }
 
 thead th {
