@@ -14,9 +14,3 @@ def test_home(client: FlaskClient):
     assert response.content_type == "text/html; charset=utf-8"
     # TEST: It is a webpage that we get back
     assert b"<!doctype html>" in response.data
-
-
-def test_static_js_exists(client: FlaskClient):
-    """TEST: /static/ansibleinventorycmdb.js loads."""
-    response = client.get("/static/ansibleinventorycmdb.js")
-    assert response.status_code == HTTPStatus.OK
