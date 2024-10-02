@@ -43,9 +43,9 @@ def home() -> str:
 
     inventories = cmdb.get_inventories()
 
-    inventory_names = list(inventories.keys())
+    # inventory_names = list(inventories.keys())
 
-    return render_template("home.html.j2", __app_nice_name="Ansible Inventory CMDB", inventories=inventory_names)
+    return render_template("home.html.j2", __app_nice_name="Ansible Inventory CMDB", inventories=inventories)
 
 
 # Flask homepage, generally don't have this as a blueprint.
