@@ -32,26 +32,57 @@ def start_blueprint_one() -> None:
     """Method to 'configure' this module. Needs to be called under `with app.app_context():` from __init__.py."""
     global cmdb  # noqa: PLW0603 Necessary evil as far as I can tell, could move to all objects but eh...
 
-    cmdb = AnsibleCMDB(current_app.config["cmdb"]["inventory_url"])  # Create an instance of our CMDB class
+    cmdb = AnsibleCMDB(current_app.config["cmdb"])  # Create an instance of our CMDB class
+
+
+@bp.route("/")
+def home() -> str:
+    assert cmdb is not None
+
+    inventories = cmdb.get_inventories()
+
+    inventory_names = list(inventories.keys())
+
+    return render_template("home.html.j2", __app_nice_name="Ansible Inventory CMDB", inventories=inventory_names)
 
 
 # Flask homepage, generally don't have this as a blueprint.
-@bp.route("/")
-def home() -> str:
+@bp.route("/inventory/<string:inventory>")
+def inventory(inventory: str) -> str:
     """Flask home."""
     assert cmdb is not None
 
-    schema_mapping = current_app.config["cmdb"]["schema_mapping"]
+    schema_mapping = dict(current_app.config["cmdb"][inventory]["schema_mapping"])
+
+    print(type(schema_mapping))
 
     for mapping, nice_text in schema_mapping.items():
         logger.info(f"Mapping: {mapping} -> {nice_text}")
 
+    inventory_dict = cmdb.get_inventory(inventory)
+
+    for key, value in schema_mapping.items():
+        print(value, end=", ")
+
+    # for host, host_vars, in inventory_dict["hosts"].items():
+    #     print(f"{host} -> {host_vars}", end=", ")
+
+    for host, host_vars, in inventory_dict["hosts"].items():
+        print(f"")
+        for key, value in schema_mapping.items():
+            # print(f"{key}", end=", ")
+            if key in host_vars["vars"]:
+                print(f"{host_vars['vars'][key]}", end=", ")
+
     return render_template(
-        "home.html.j2", __app_nice_name="Ansible Inventory CMDB", cmdb=cmdb.get(), schema_mapping=schema_mapping
+        "inventory.html.j2",
+        __app_nice_name="Ansible Inventory CMDB",
+        cmdb=inventory_dict,
+        schema_mapping=schema_mapping,
     )  # Return a webpage
 
 
-@bp.route("/host/<string:host>")
+@bp.route("/inventory/<string:inventory>/host/<string:host>")
 def host(host: str) -> Response:
     """Return a JSON response for a host."""
     assert cmdb is not None
@@ -69,12 +100,12 @@ def host(host: str) -> Response:
     return render_template("vars.html.j2", __thing="host_vars", __host=host, __vars=host_nice_vars)  # Return a webpage
 
 
-@bp.route("/group/<string:group>")
-def group(group: str) -> Response:
+@bp.route("/inventory/<string:inventory>/group/<string:group>")
+def group(inventory: str, group: str) -> Response:
     """Return a JSON response for a group."""
     assert cmdb is not None
 
-    cmdb_group_vars = cmdb.get_group(group)
+    cmdb_group_vars = cmdb.get_group(inventory, group)
 
     alphabetical_var_dict = dict(sorted(cmdb_group_vars.items(), key=lambda item: str(item[0])))
 

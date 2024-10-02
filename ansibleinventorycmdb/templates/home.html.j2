@@ -5,22 +5,13 @@
     <title>{{ __app_nice_name }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="X-Clacks-Overhead" content="GNU Terry Pratchett" />
-    <link rel="stylesheet" href="static/zy.css" />
+    <link rel="stylesheet" href="/static/zy.css" />
 </head>
 
 <body>
     <main>
         <h1 id="TITLE">{{ __app_nice_name }}</h1>
-        <table id="Hosts">
-            <tr>
-                {% for key, value in schema_mapping.items() %}<th onclick="sortTable({{ loop.index0 }})"">{{ value }}</th>{% endfor %}<th>Host Vars</th><th>Group Vars</th>
-            </tr>{% for host, host_vars in cmdb.items() %}
-            <tr>
-                {% for key, value in schema_mapping.items() %}<td>{{ host_vars['vars'][key] | default('-') }}</td>{% endfor %}
-                <td><a href="/host/{{ host }}">{{ host }}</a></td>
-                <td>{% for group in host_vars['groups'] %}<a href="/group/{{ group }}">{{ group }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td>
-            </tr>{% endfor %}
-        </table>
+        {% for inventory in inventories %}<p><a href="/inventory/{{ inventory }}">{{ inventory }}</a></p>{% endfor %}
     </main>
 </body>
 
