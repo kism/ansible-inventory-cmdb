@@ -64,7 +64,6 @@ def inventory(inventory: str) -> str:
 
     return render_template(
         "inventory.html.j2",
-        __app_nice_name="Ansible Inventory CMDB",
         inventory_name=inventory,
         inventory_dict=inventory_dict,
         schema_mapping=schema_mapping,
