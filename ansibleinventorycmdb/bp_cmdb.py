@@ -54,31 +54,10 @@ def inventory(inventory: str) -> str:
 
     schema_mapping = dict(current_app.config["cmdb"][inventory]["schema_mapping"])
 
-    print(type(schema_mapping))
-
     for mapping, nice_text in schema_mapping.items():
         logger.info(f"Mapping: {mapping} -> {nice_text}")
 
     inventory_dict = cmdb.get_inventory(inventory)
-
-    for key, value in schema_mapping.items():
-        print(value, end=", ")
-
-    # for host, host_vars, in inventory_dict["hosts"].items():
-    #     print(f"{host} -> {host_vars}", end=", ")
-
-    for (
-        host,
-        host_vars,
-    ) in inventory_dict["hosts"].items():
-        # print(f"")
-        print(f"{type(host)}, {type(host_vars)}")
-        for key, value in schema_mapping.items():
-            # print(f"{key}", end=", ")
-            assert isinstance(host_vars, dict)
-            assert isinstance(host_vars["vars"], dict)
-            # if key in host_vars["vars"]:
-                # print(f"{host_vars['vars'][key]}", end=", ")
 
     return render_template(
         "inventory.html.j2",
