@@ -45,13 +45,13 @@ def test_dictionary_functions_of_config(place_test_config, tmp_path):
     conf = ansibleinventorycmdb.config.AnsibleInventoryCmdbConfig(instance_path=tmp_path)
 
     # TEST: __contains__ method.
-    assert "app" in conf, "__contains__ method of config object doesn't work"
+    assert "cmdb" in conf, "__contains__ method of config object doesn't work"
 
     # TEST: __repr__ method.
     assert isinstance(str(conf), str), "__repr__ method of config object doesn't work"
 
     # TEST: __getitem__ method.
-    assert isinstance(conf["app"], dict), "__getitem__ method of config object doesn't work"
+    assert isinstance(conf["cmdb"], dict), "__getitem__ method of config object doesn't work"
 
     from collections.abc import ItemsView
 
@@ -75,7 +75,7 @@ def test_config_dictionary_merge(place_test_config, tmp_path, get_test_config):
         result_dict = conf._merge_with_defaults(DEFAULT_CONFIG, test_dictionary)
 
         # TEST: Check that the resulting config after ensuring default is valid
-        assert isinstance(result_dict["app"], dict)
+        assert isinstance(result_dict["cmdb"], dict)
         assert isinstance(result_dict["logging"], dict)
         assert isinstance(result_dict["logging"]["path"], str)
         assert isinstance(result_dict["logging"]["level"], str)
@@ -94,13 +94,13 @@ def test_config_dictionary_not_in_schema(place_test_config, tmp_path, caplog: py
 
     test_config = {
         "TEST_CONFIG_ROOT_ENTRY_NOT_IN_SCHEMA": "",
-        "app": {"TEST_CONFIG_APP_ENTRY_NOT_IN_SCHEMA": ""},
+        "cmdb": {"TEST_CONFIG_APP_ENTRY_NOT_IN_SCHEMA": ""},
     }
 
     # TEST: Warning when config loaded has a key that is not in the schema
     conf._warn_unexpected_keys(DEFAULT_CONFIG, test_config, "<root>")
     assert "Config entry key <root>[TEST_CONFIG_ROOT_ENTRY_NOT_IN_SCHEMA] not in schema" in caplog.text
-    assert "Config entry key [app][TEST_CONFIG_APP_ENTRY_NOT_IN_SCHEMA] not in schema" in caplog.text
+    assert "Config entry key [cmdb][TEST_CONFIG_APP_ENTRY_NOT_IN_SCHEMA] not in schema" in caplog.text
 
 
 def test_load_write_no_config_path(place_test_config, tmp_path):
