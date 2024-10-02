@@ -53,7 +53,6 @@ def create_app(test_config: dict | None = None, instance_path: str | None = None
     with app.app_context():
         bp_cmdb.start_blueprint_one()
 
-
     app.logger.info("Starting Web Server")
 
     return app

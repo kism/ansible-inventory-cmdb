@@ -17,8 +17,8 @@
             </tr>{% for host, host_vars in inventory_dict['hosts'].items() %}
             <tr>
                 {% for key, value in schema_mapping.items() %}<td>{{ host_vars['vars'][key] | default('-') }}</td>{% endfor %}
-                <td><a href="/host/{{ host }}">{{ host }}</a></td>
-                <td>{% for group in host_vars['groups'] %}<a href="/group/{{ group }}">{{ group }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td>
+                <td><a href="/inventory/{{ inventory_name }}/host/{{ host }}">{{ host }}</a></td>
+                <td>{% for group in host_vars['groups'] %}<a href="/inventory/{{ inventory_name }}/group/{{ group }}">{{ group }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td>
             </tr>{% endfor %}
         </table>
     </main>

@@ -1,9 +1,9 @@
+"""Ansible Inventory CMDB Object."""
+
 import logging
 import os
 import pickle
 import re
-from pprint import pformat
-from urllib.parse import urlparse
 
 import requests
 import yaml
@@ -14,9 +14,11 @@ CACHE_FILE = "instance" + os.sep + "cache.pkl"
 
 
 class AnsibleCMDB:
-    inventories: dict = {}
+    """Ansible CMDB object."""
 
-    def __init__(self, inventory_dict: dict):
+    def __init__(self, inventory_dict: dict) -> None:
+        """Initialise the Ansible CMDB object."""
+        self.inventories: dict[str, dict] = {}
         for inventory_name, inventory_in_dict in inventory_dict.items():
             self.inventories[inventory_name] = {
                 "url": inventory_in_dict["inventory_url"],
@@ -25,20 +27,14 @@ class AnsibleCMDB:
 
         self._setup_url_cache()
 
-        for inventory_name, inventory_tmp_dict in self.inventories.items():
-            inventory_tmp_dict["hosts"] = self._build_cmdb_hosts(
-                inventory_name=inventory_name, inventory_dict=inventory_tmp_dict
-            )
-            inventory_tmp_dict["groups"] = self._build_cmdb_groups(
-                inventory_name=inventory_name, inventory_dict=inventory_tmp_dict
-            )
-
-        # logger.info(f"CMDB: {pformat(self.inventories)}")
+        for inventory_tmp_dict in self.inventories.values():
+            inventory_tmp_dict["hosts"] = self._build_cmdb_hosts(inventory_dict=inventory_tmp_dict)
+            inventory_tmp_dict["groups"] = self._build_cmdb_groups(inventory_dict=inventory_tmp_dict)
 
         with open("instance" + os.sep + "cmdb.yml", "w") as cmdb_file:
             yaml.dump(self.inventories, cmdb_file)
 
-    def _setup_url_cache(self):
+    def _setup_url_cache(self) -> None:
         """Setup the URL cache."""
         self.url_cache: dict = {}
         if os.path.isfile(CACHE_FILE):
@@ -48,16 +44,24 @@ class AnsibleCMDB:
         if not self.url_cache:
             self.url_cache = {}
 
-    def get_inventories(self):
+    def get_inventories(self) -> dict:
+        """Get the inventories."""
         return self.inventories
 
-    def get_inventory(self, inventory: str):
+    def get_inventory(self, inventory: str) -> dict:
+        """Get an inventory."""
         return self.inventories[inventory]
 
-    def get_group(self, inventory: str, group: str):
-        return self.inventories[inventory][group]
+    def get_host(self, inventory: str, host: str) -> dict:
+        """Get a hosts vars."""
+        return self.inventories[inventory]["hosts"][host]
 
-    def _build_cmdb_groups(self, inventory_name: str, inventory_dict: dict):
+    def get_group(self, inventory: str, group: str) -> dict:
+        """Get a groups vars."""
+        return self.inventories[inventory]["groups"][group]
+
+    def _build_cmdb_groups(self, inventory_dict: dict) -> dict:
+        """Build the CMDB groups from the inventory."""
         inventory_yaml = self._get_yaml(inventory_dict["url"])
 
         groups: dict = {}
@@ -69,11 +73,8 @@ class AnsibleCMDB:
 
         return groups
 
-    def _build_cmdb_hosts(self, inventory_name: str, inventory_dict: dict):
-        """Build the CMDB from the inventory."""
-
-        print(pformat(inventory_name))
-        print(pformat(inventory_dict))
+    def _build_cmdb_hosts(self, inventory_dict: dict) -> dict:
+        """Build the CMDB hosts from the inventory."""
         inventory_yaml = self._get_yaml(inventory_dict["url"])
 
         hosts: dict = {}
@@ -83,16 +84,13 @@ class AnsibleCMDB:
 
         for host in hosts:
             hosts[host]["groups"] = self._get_groups_of_host(host, inventory_yaml)
-            assert isinstance(hosts[host]["groups"], list)
 
         for host in hosts:
             self._set_host_vars(host, hosts[host]["vars"], inventory_dict["base_url"])
-            assert isinstance(hosts[host]["vars"], dict)
 
         # Get the inline vars for each host
         for host in hosts:
             self._set_host_vars_from_inventory(host, hosts, inventory_yaml)
-            assert isinstance(hosts[host]["vars"], dict)
 
         return hosts
 
@@ -105,17 +103,10 @@ class AnsibleCMDB:
 
     def _get_groups_of_host(self, host: str, inventory_yaml: dict) -> list:
         """Get the groups of a host."""
-        host_groups = []
+        return [group for group in inventory_yaml if host in inventory_yaml[group]["hosts"]]
 
-        for group in inventory_yaml:
-            if host in inventory_yaml[group]["hosts"]:
-                host_groups.append(group)
-
-        return host_groups
-
-    def _set_group_vars(self, group: str, group_vars: dict, base_url: str):
+    def _set_group_vars(self, group: str, group_vars: dict, base_url: str) -> None:
         """Get the vars of a group."""
-
         group_var_urls = [
             f"{base_url}/group_vars/{group}.yml",
             f"{base_url}/inventory/group_vars/{group}.yml",
@@ -125,10 +116,9 @@ class AnsibleCMDB:
             group_yaml = self._get_yaml(group_var_url)
 
             if group_yaml:
-                for key, value in group_yaml.items():
-                    group_vars[key] = value
+                group_vars.update(dict(group_yaml.items()))
 
-    def _set_host_vars(self, host: str, host_vars: dict, base_url: str):
+    def _set_host_vars(self, host: str, host_vars: dict, base_url: str) -> None:
         """Get the vars of a host."""
         host_var_urls = [
             f"{base_url}/host_vars/{host}.yml",
@@ -139,10 +129,9 @@ class AnsibleCMDB:
             host_yaml = self._get_yaml(host_var_url)
 
             if host_yaml:
-                for key, value in host_yaml.items():
-                    host_vars[key] = value
+                host_vars.update(dict(host_yaml.items()))
 
-    def _get_yaml(self, url: str):
+    def _get_yaml(self, url: str) -> dict:
         """Get a yaml file from a URL."""
         if url not in self.url_cache:
             logger.info(f"Getting URL: {url}")

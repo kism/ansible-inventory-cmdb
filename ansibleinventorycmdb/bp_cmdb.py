@@ -3,7 +3,7 @@
 import logging
 
 import yaml
-from flask import Blueprint, Response, current_app, jsonify, render_template
+from flask import Blueprint, current_app, render_template
 
 from ansibleinventorycmdb.cmdb import AnsibleCMDB
 
@@ -37,7 +37,9 @@ def start_blueprint_one() -> None:
 
 @bp.route("/")
 def home() -> str:
-    assert cmdb is not None
+    """Home webpage."""
+    if not isinstance(cmdb, AnsibleCMDB):
+        return "No CMDB found, please check the logs."
 
     inventories = cmdb.get_inventories()
 
@@ -50,7 +52,8 @@ def home() -> str:
 @bp.route("/inventory/<string:inventory>")
 def inventory(inventory: str) -> str:
     """Flask home."""
-    assert cmdb is not None
+    if not isinstance(cmdb, AnsibleCMDB):
+        return "No CMDB found, please check the logs."
 
     schema_mapping = dict(current_app.config["cmdb"][inventory]["schema_mapping"])
 
@@ -62,18 +65,20 @@ def inventory(inventory: str) -> str:
     return render_template(
         "inventory.html.j2",
         __app_nice_name="Ansible Inventory CMDB",
+        inventory_name=inventory,
         inventory_dict=inventory_dict,
         schema_mapping=schema_mapping,
     )  # Return a webpage
 
 
 @bp.route("/inventory/<string:inventory>/host/<string:host>")
-def host(host: str) -> Response:
+def host(inventory: str, host: str) -> str:
     """Return a JSON response for a host."""
-    assert cmdb is not None
+    if not isinstance(cmdb, AnsibleCMDB):
+        return "No CMDB found, please check the logs."
 
     # Get copy of cmdb host vars in alphabetical order
-    alphabetical_var_dict = dict(sorted(cmdb.get()[host]["vars"].items(), key=lambda item: str(item[0])))
+    alphabetical_var_dict = dict(sorted(cmdb.get_host(inventory, host)["vars"].items(), key=lambda item: str(item[0])))
 
     host_nice_vars = yaml.dump(alphabetical_var_dict, default_flow_style=False, width=1000)
 
@@ -86,9 +91,10 @@ def host(host: str) -> Response:
 
 
 @bp.route("/inventory/<string:inventory>/group/<string:group>")
-def group(inventory: str, group: str) -> Response:
+def group(inventory: str, group: str) -> str:
     """Return a JSON response for a group."""
-    assert cmdb is not None
+    if not isinstance(cmdb, AnsibleCMDB):
+        return "No CMDB found, please check the logs."
 
     cmdb_group_vars = cmdb.get_group(inventory, group)
 
