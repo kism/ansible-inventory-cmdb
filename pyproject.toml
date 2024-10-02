@@ -21,6 +21,8 @@ detect-test-pollution = "*"
 pytest-random-order = "*"
 mypy = "*"
 ruff = "*"
+types-requests = "*"
+types-pyyaml = "*"
 
 [tool.poetry.group.dev.dependencies]
 pylance = "*"
