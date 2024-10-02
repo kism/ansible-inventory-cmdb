@@ -67,17 +67,23 @@ def inventory(inventory: str) -> str:
     # for host, host_vars, in inventory_dict["hosts"].items():
     #     print(f"{host} -> {host_vars}", end=", ")
 
-    for host, host_vars, in inventory_dict["hosts"].items():
-        print(f"")
+    for (
+        host,
+        host_vars,
+    ) in inventory_dict["hosts"].items():
+        # print(f"")
+        print(f"{type(host)}, {type(host_vars)}")
         for key, value in schema_mapping.items():
             # print(f"{key}", end=", ")
-            if key in host_vars["vars"]:
-                print(f"{host_vars['vars'][key]}", end=", ")
+            assert isinstance(host_vars, dict)
+            assert isinstance(host_vars["vars"], dict)
+            # if key in host_vars["vars"]:
+                # print(f"{host_vars['vars'][key]}", end=", ")
 
     return render_template(
         "inventory.html.j2",
         __app_nice_name="Ansible Inventory CMDB",
-        cmdb=inventory_dict,
+        inventory_dict=inventory_dict,
         schema_mapping=schema_mapping,
     )  # Return a webpage
 

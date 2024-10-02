@@ -14,7 +14,7 @@
         <table id="Hosts">
             <tr>
                 {% for key, value in schema_mapping.items() %}<th onclick="sortTable({{ loop.index0 }})"">{{ value }}</th>{% endfor %}<th>Host Vars</th><th>Group Vars</th>
-            </tr>{% for host, host_vars in cmdb.items() %}
+            </tr>{% for host, host_vars in inventory_dict['hosts'].items() %}
             <tr>
                 {% for key, value in schema_mapping.items() %}<td>{{ host_vars['vars'][key] | default('-') }}</td>{% endfor %}
                 <td><a href="/host/{{ host }}">{{ host }}</a></td>
