@@ -26,10 +26,14 @@ class AnsibleCMDB:
         self._setup_url_cache()
 
         for inventory_name, inventory_tmp_dict in self.inventories.items():
-            inventory_tmp_dict["hosts"] = self._build_cmdb_hosts(inventory_name=inventory_name, inventory_dict=inventory_tmp_dict)
-            inventory_tmp_dict["groups"] = self._build_cmdb_groups(inventory_name=inventory_name, inventory_dict=inventory_tmp_dict)
+            inventory_tmp_dict["hosts"] = self._build_cmdb_hosts(
+                inventory_name=inventory_name, inventory_dict=inventory_tmp_dict
+            )
+            inventory_tmp_dict["groups"] = self._build_cmdb_groups(
+                inventory_name=inventory_name, inventory_dict=inventory_tmp_dict
+            )
 
-        logger.info(f"CMDB: {pformat(self.inventories)}")
+        # logger.info(f"CMDB: {pformat(self.inventories)}")
 
         with open("instance" + os.sep + "cmdb.yml", "w") as cmdb_file:
             yaml.dump(self.inventories, cmdb_file)
@@ -79,26 +83,25 @@ class AnsibleCMDB:
 
         for host in hosts:
             hosts[host]["groups"] = self._get_groups_of_host(host, inventory_yaml)
+            assert isinstance(hosts[host]["groups"], list)
 
         for host in hosts:
             self._set_host_vars(host, hosts[host]["vars"], inventory_dict["base_url"])
+            assert isinstance(hosts[host]["vars"], dict)
 
         # Get the inline vars for each host
         for host in hosts:
             self._set_host_vars_from_inventory(host, hosts, inventory_yaml)
+            assert isinstance(hosts[host]["vars"], dict)
 
         return hosts
 
-    def _set_host_vars_from_inventory(self, host: str, inventory: dict, inventory_yaml: dict) -> dict:
+    def _set_host_vars_from_inventory(self, host: str, hosts: dict, inventory_yaml: dict) -> None:
         """Set the vars of a host from the inventory."""
         for group in inventory_yaml:
             if host in inventory_yaml[group]["hosts"] and inventory_yaml[group]["hosts"][host]:
                 for key, value in inventory_yaml[group]["hosts"][host].items():
-                    print(f"Key: {key}, Value: {value}")
-                    inventory[host]["vars"][key] = value
-
-
-        return inventory
+                    hosts[host]["vars"][key] = value
 
     def _get_groups_of_host(self, host: str, inventory_yaml: dict) -> list:
         """Get the groups of a host."""
