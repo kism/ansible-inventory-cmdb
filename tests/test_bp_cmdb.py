@@ -1,11 +1,8 @@
 """Tests the blueprint's HTTP endpoint."""
 
-import logging
 from http import HTTPStatus
 
 from flask.testing import FlaskClient
-
-from ansibleinventorycmdb import create_app
 
 
 def test_hello(client: FlaskClient):

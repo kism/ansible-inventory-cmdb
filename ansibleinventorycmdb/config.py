@@ -1,16 +1,15 @@
 """Config loading, setup, validating, writing."""
 
 import contextlib
-import logging
 import os
 import pwd
 import typing
 
 import tomlkit
 
-# Logging should be all done at INFO level or higher as the log level hasn't been set yet
-# Modules should all setup logging like this so the log messages include the modules name.
-logger = logging.getLogger(__name__)
+from .logger import get_logger
+
+logger = get_logger(__name__)
 
 # Default config dictionary, also works as a schema
 DEFAULT_CONFIG: dict[str, dict] = {

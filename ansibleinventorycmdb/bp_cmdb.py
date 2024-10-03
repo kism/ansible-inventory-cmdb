@@ -1,38 +1,51 @@
 """Blueprint one's object..."""
 
-import logging
+import threading
+import time
 
 import yaml
 from flask import Blueprint, current_app, render_template
 
 from ansibleinventorycmdb.cmdb import AnsibleCMDB
 
-# Modules should all setup logging like this so the log messages include the modules name.
-# If you were to list all loggers with something like...
-# `loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]`
-# Before creating this object, you would not see a logger with this modules name (ansibleinventorycmdb.this_module_name)
-logger = logging.getLogger(
-    __name__
-)  # Create a logger: ansibleinventorycmdb.this_module_name, inherit config from root logger
+from .logger import get_logger
+
+logger = get_logger(__name__)
 
 # Register this module (__name__) as available to the blueprints of ansibleinventorycmdb, I think https://flask.palletsprojects.com/en/3.0.x/blueprints/
 bp = Blueprint("ansibleinventorycmdb", __name__)
 
 cmdb: AnsibleCMDB | None = None
 
-
-# KISM-BOILERPLATE:
-# So regarding current_app, have a read of https://flask.palletsprojects.com/en/3.0.x/appcontext/
-# This function is a bit of a silly example, but often you need to do things to initialise the module.
-# You can't use the current_app object outside of a function since it behaves a bit weird, even if
-#   you import the module under `with app.app_context():`
-# So we call this to set globals in this module.
-# You don't need to use this to set every variable as current_app will work fine in any function.
-def start_blueprint_one() -> None:
+def start_cmdb_bp() -> None:
     """Method to 'configure' this module. Needs to be called under `with app.app_context():` from __init__.py."""
     global cmdb  # noqa: PLW0603 Necessary evil as far as I can tell, could move to all objects but eh...
 
     cmdb = AnsibleCMDB(current_app.config["cmdb"])  # Create an instance of our CMDB class
+
+    thread = threading.Thread(target=refresh_cmdb)
+    thread.daemon = True
+    thread.start()
+
+
+def refresh_cmdb() -> None:
+    """Refresh the CMDB data."""
+    while True:
+        if not isinstance(cmdb, AnsibleCMDB):
+            logger.error("No CMDB found, please check the logs.")
+            time.sleep(60)
+        else:
+            if not cmdb.ready:
+                cmdb.build()
+
+            if cmdb.refresh_required:
+                cmdb.refresh()
+
+            while True:
+                logger.debug("Sleeping before refresh")
+                time.sleep(21600)
+                cmdb.refresh()
+                logger.info("Sleeping for 6 hours")
 
 
 @bp.route("/")
@@ -54,9 +67,6 @@ def inventory(inventory: str) -> str:
         return "No CMDB found, please check the logs."
 
     schema_mapping = dict(current_app.config["cmdb"][inventory]["schema_mapping"])
-
-    for mapping, nice_text in schema_mapping.items():
-        logger.info(f"Mapping: {mapping} -> {nice_text}")
 
     inventory_dict = cmdb.get_inventory(inventory)
 
@@ -108,4 +118,6 @@ def group(inventory: str, group: str) -> str:
 
     group_nice_vars = "---\n" + group_nice_vars
 
-    return render_template("vars.html.j2", __inventory=inventory, __thing="group_vars", __host=group, __vars=group_nice_vars)  # Return a webpage
+    return render_template(
+        "vars.html.j2", __inventory=inventory, __thing="group_vars", __host=group, __vars=group_nice_vars
+    )  # Return a webpage
