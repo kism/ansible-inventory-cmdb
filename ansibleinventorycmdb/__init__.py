@@ -51,7 +51,7 @@ def create_app(test_config: dict | None = None, instance_path: str | None = None
     # For modules that need information from the app object we need to start them under `with app.app_context():`
     # Since in the blueprint_one module, we use `from flask import current_app` to get the app object to get the config
     with app.app_context():
-        bp_cmdb.start_blueprint_one()
+        bp_cmdb.start_cmdb_bp()
 
     app.logger.info("Starting Web Server")
 

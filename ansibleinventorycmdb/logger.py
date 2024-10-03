@@ -1,12 +1,40 @@
 """Setup the logger functionality for ansibleinventorycmdb."""
 
 import logging
+import typing
 from logging.handlers import RotatingFileHandler
+from typing import cast
 
 from flask import Flask
 
-LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]  # Valid str logging levels.
+LOG_LEVELS = [
+    "TRACE",
+    "DEBUG",
+    "INFO",
+    "WARNING",
+    "ERROR",
+    "CRITICAL",
+]  # Valid str logging levels.
 LOG_FORMAT = "%(asctime)s:%(levelname)s:%(name)s:%(message)s"  # This is the logging message format that I like.
+TRACE_LEVEL_NUM = 5
+
+
+class CustomLogger(logging.Logger):
+    """Custom logger to appease mypy."""
+
+    def trace(self, message, *args: typing.Any, **kws: typing.Any) -> None:  # noqa: ANN001, ANN401
+        """Create logger level for trace."""
+        if self.isEnabledFor(TRACE_LEVEL_NUM):
+            # Yes, logger takes its '*args' as 'args'.
+            self._log(TRACE_LEVEL_NUM, message, args, **kws)
+
+
+logging.addLevelName(TRACE_LEVEL_NUM, "TRACE")
+logging.setLoggerClass(CustomLogger)
+
+# This is where we log to in this module, following the standard of every module.
+# I don't use the function so we can have this at the top
+logger = cast(CustomLogger, logging.getLogger(__name__))
 
 
 # In flask the root logger doesn't have any handlers, its all in app.logger
@@ -15,8 +43,6 @@ LOG_FORMAT = "%(asctime)s:%(levelname)s:%(name)s:%(message)s"  # This is the log
 # logger      : root, ansibleinventorycmdb, ansibleinventorycmdb.module_name,
 # The issue is that waitress, werkzeug (any any other modules that log) will log separately.
 # The aim is, remove the default handler from the flask App and create one on the root logger to apply config to all.
-
-logger = logging.getLogger(__name__)  # This is where we log to in this module, following the standard of every module.
 
 
 # Pass in the whole app object to make it obvious we are configuring the logger object within the app object.
@@ -52,6 +78,11 @@ def setup_logger(app: Flask, logging_conf: dict, in_logger: logging.Logger | Non
     logger.info("Logger configuration set!")
 
 
+def get_logger(name: str) -> CustomLogger:
+    """Get a logger with the name provided."""
+    return cast(CustomLogger, logging.getLogger(name))
+
+
 def _has_file_handler(in_logger: logging.Logger) -> bool:
     """Check if logger has a file handler."""
     return any(isinstance(handler, logging.FileHandler) for handler in in_logger.handlers)
@@ -83,7 +114,9 @@ def _set_log_level(in_logger: logging.Logger, log_level: int | str) -> None:
             )
         else:
             in_logger.setLevel(log_level)
+            logger.trace("Set log level: %s", log_level)
             logger.debug("Set log level: %s", log_level)
+            logger.info("Set log level: %s", log_level)
     else:
         in_logger.setLevel(log_level)
 

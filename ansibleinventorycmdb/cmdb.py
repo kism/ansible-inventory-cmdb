@@ -1,48 +1,62 @@
 """Ansible Inventory CMDB Object."""
 
-import logging
 import os
 import pickle
 import re
+import tomlkit.exceptions
 
 import requests
 import yaml
 
-logger = logging.getLogger(__name__)
+from .logger import get_logger
 
-CACHE_FILE = "instance" + os.sep + "cache.pkl"
+logger = get_logger(__name__)
 
 
 class AnsibleCMDB:
     """Ansible CMDB object."""
 
-    def __init__(self, inventory_dict: dict) -> None:
+    def __init__(self, inventory_dict: dict, instance_path: str) -> None:
         """Initialise the Ansible CMDB object."""
+        self._cache_file = os.path.join(instance_path, "url_cache.pkl")
         self.inventories: dict[str, dict] = {}
+        self.url_cache: dict = {}
+        self.ready = False
+        self.refresh_required = False
+
         for inventory_name, inventory_in_dict in inventory_dict.items():
             self.inventories[inventory_name] = {
                 "url": inventory_in_dict["inventory_url"],
                 "base_url": re.sub(r"/inventory.*", "", inventory_in_dict["inventory_url"]),
             }
 
-        self._setup_url_cache()
+        self._load_url_cache()
 
+    def _load_url_cache(self) -> None:
+        """Setup the URL cache."""
+        if os.path.isfile(self._cache_file):
+            with open(self._cache_file, "rb") as cache_file:
+                logger.info(f"Loaded URL cache file: {self._cache_file}")
+                self.url_cache = pickle.load(cache_file)
+                self.refresh_required = True
+
+    def refresh(self) -> None:
+        """Refresh the CMDB data."""
+        logger.info("Refreshing CMDB")
+        self.url_cache = {}
+        self.build()
+        logger.info("CMDB refresh complete")
+        self.refresh_required = False
+
+    def build(self) -> None:
+        """Build the CMDB."""
+        logger.info("Building CMDB")
         for inventory_tmp_dict in self.inventories.values():
             inventory_tmp_dict["hosts"] = self._build_cmdb_hosts(inventory_dict=inventory_tmp_dict)
             inventory_tmp_dict["groups"] = self._build_cmdb_groups(inventory_dict=inventory_tmp_dict)
 
-        with open("instance" + os.sep + "cmdb.yml", "w") as cmdb_file:
-            yaml.dump(self.inventories, cmdb_file)
-
-    def _setup_url_cache(self) -> None:
-        """Setup the URL cache."""
-        self.url_cache: dict = {}
-        if os.path.isfile(CACHE_FILE):
-            with open(CACHE_FILE, "rb") as cache_file:
-                self.url_cache = pickle.load(cache_file)
-
-        if not self.url_cache:
-            self.url_cache = {}
+        logger.info("CMDB built")
+        self.ready = True
 
     def get_inventories(self) -> dict:
         """Get the inventories."""
@@ -50,15 +64,24 @@ class AnsibleCMDB:
 
     def get_inventory(self, inventory: str) -> dict:
         """Get an inventory."""
-        return self.inventories[inventory]
+        try:
+            return self.inventories[inventory]
+        except (KeyError, tomlkit.exceptions.NonExistentKey):
+            return {}
 
     def get_host(self, inventory: str, host: str) -> dict:
         """Get a hosts vars."""
-        return self.inventories[inventory]["hosts"][host]
+        try:
+            return self.inventories[inventory]["hosts"][host]
+        except KeyError:
+            return {}
 
     def get_group(self, inventory: str, group: str) -> dict:
         """Get a groups vars."""
-        return self.inventories[inventory]["groups"][group]
+        try:
+            return self.inventories[inventory]["groups"][group]
+        except KeyError:
+            return {}
 
     def _build_cmdb_groups(self, inventory_dict: dict) -> dict:
         """Build the CMDB groups from the inventory."""
@@ -134,17 +157,17 @@ class AnsibleCMDB:
     def _get_yaml(self, url: str) -> dict:
         """Get a yaml file from a URL."""
         if url not in self.url_cache:
-            logger.info(f"Getting URL: {url}")
+            logger.debug(f"Getting URL: {url}")
             response = requests.get(url, timeout=5)
 
             temp_text = "" if not response.ok else response.text
 
             self.url_cache[url] = yaml.safe_load(temp_text)
 
-            with open(CACHE_FILE, "wb") as cache_file:
+            with open(self._cache_file, "wb") as cache_file:
                 pickle.dump(self.url_cache, cache_file, pickle.HIGHEST_PROTOCOL)
 
         else:
-            logger.info(f"Using cached URL: {url}")
+            logger.trace(f"Using cached URL: {url}")
 
         return self.url_cache[url]
