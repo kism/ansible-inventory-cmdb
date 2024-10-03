@@ -74,10 +74,10 @@ The template repo uses codecov to get a badge on the README.md, look at their gu
 
 Defaults are defined in config.py, and config loading and validation are handled in there too.
 
-# Todo
+## Todo
 
-- Cleanup logging
-- Use instance path properly
-- Refresh every 3 hours
+- ~~Cleanup logging~~
+- ~~Use instance path properly~~
+- ~~Refresh every X hours~~
 - Write real readme
 - Use YAML

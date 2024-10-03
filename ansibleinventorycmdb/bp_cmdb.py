@@ -2,7 +2,9 @@
 
 import threading
 import time
+from http import HTTPStatus
 
+import tomlkit.exceptions
 import yaml
 from flask import Blueprint, current_app, render_template
 
@@ -17,11 +19,12 @@ bp = Blueprint("ansibleinventorycmdb", __name__)
 
 cmdb: AnsibleCMDB | None = None
 
+
 def start_cmdb_bp() -> None:
     """Method to 'configure' this module. Needs to be called under `with app.app_context():` from __init__.py."""
     global cmdb  # noqa: PLW0603 Necessary evil as far as I can tell, could move to all objects but eh...
 
-    cmdb = AnsibleCMDB(current_app.config["cmdb"])  # Create an instance of our CMDB class
+    cmdb = AnsibleCMDB(current_app.config["cmdb"], current_app.instance_path)  # Create an instance of our CMDB class
 
     thread = threading.Thread(target=refresh_cmdb)
     thread.daemon = True
@@ -36,9 +39,11 @@ def refresh_cmdb() -> None:
             time.sleep(60)
         else:
             if not cmdb.ready:
+                logger.info("CMDB not ready, building...")
                 cmdb.build()
 
             if cmdb.refresh_required:
+                logger.info("CMDB refresh required, refreshing...")
                 cmdb.refresh()
 
             while True:
@@ -49,61 +54,85 @@ def refresh_cmdb() -> None:
 
 
 @bp.route("/")
-def home() -> str:
+def home() -> tuple[str, int]:
     """Home webpage."""
     if not isinstance(cmdb, AnsibleCMDB):
-        return "No CMDB found, please check the logs."
+        return "No CMDB found, please check the logs.", HTTPStatus.INTERNAL_SERVER_ERROR
 
     inventories = cmdb.get_inventories()
 
-    return render_template("home.html.j2", inventories=inventories)
+    return render_template("home.html.j2", inventories=inventories), HTTPStatus.OK
 
 
 # Flask homepage, generally don't have this as a blueprint.
 @bp.route("/inventory/<string:inventory>")
-def inventory(inventory: str) -> str:
+def inventory(inventory: str) -> tuple[str, int]:
     """Flask home."""
     if not isinstance(cmdb, AnsibleCMDB):
-        return "No CMDB found, please check the logs."
+        return "No CMDB found, please check the logs.", HTTPStatus.INTERNAL_SERVER_ERROR
 
-    schema_mapping = dict(current_app.config["cmdb"][inventory]["schema_mapping"])
-
-    inventory_dict = cmdb.get_inventory(inventory)
+    if not cmdb.ready:
+        inventory_dict: dict = {"hosts": {}, "groups": {}}
+        schema_mapping = {"": "CMDB NOT LOADED, please wait a moment and refresh"}
+    else:
+        inventory_dict = cmdb.get_inventory(inventory)
+        if inventory_dict == {}:
+            return render_template("error.html.j2", error=f"Inventory '{ inventory }' not found"), HTTPStatus.NOT_FOUND
+        try:
+            schema_mapping = dict(current_app.config["cmdb"][inventory]["schema_mapping"])
+        except tomlkit.exceptions.NonExistentKey:
+            return render_template(
+                "error.html.j2", error=f"Inventory '{ inventory }' found, but inventory schema not found"
+            ), HTTPStatus.NOT_FOUND
 
     return render_template(
         "inventory.html.j2",
         inventory_name=inventory,
         inventory_dict=inventory_dict,
         schema_mapping=schema_mapping,
-    )  # Return a webpage
+    ), HTTPStatus.OK
 
 
 @bp.route("/inventory/<string:inventory>/host/<string:host>")
-def host(inventory: str, host: str) -> str:
+def host(inventory: str, host: str) -> tuple[str, int]:
     """Return a JSON response for a host."""
     if not isinstance(cmdb, AnsibleCMDB):
-        return "No CMDB found, please check the logs."
+        return "No CMDB found, please check the logs.", HTTPStatus.INTERNAL_SERVER_ERROR
 
-    # Get copy of cmdb host vars in alphabetical order
-    alphabetical_var_dict = dict(sorted(cmdb.get_host(inventory, host)["vars"].items(), key=lambda item: str(item[0])))
+    if not cmdb.ready:
+        host_nice_vars = "CMDB not ready, please wait a moment and refresh."
+    else:
+        # Get copy of cmdb host vars in alphabetical order
+        try:
+            cmdb_host_vars = cmdb.get_host(inventory, host)["vars"]
+        except KeyError:
+            return render_template("error.html.j2", error=f"Host '{ host }' not found"), 404
 
-    host_nice_vars = yaml.dump(alphabetical_var_dict, default_flow_style=False, width=1000)
+        alphabetical_var_dict = dict(sorted(cmdb_host_vars.items(), key=lambda item: str(item[0])))
 
-    if host_nice_vars == "{}":
-        host_nice_vars = ""
+        host_nice_vars = yaml.dump(alphabetical_var_dict, default_flow_style=False, width=1000)
 
-    host_nice_vars = "---\n" + host_nice_vars
+        if host_nice_vars == "{}":
+            host_nice_vars = ""
+
+        host_nice_vars = "---\n" + host_nice_vars
 
     return render_template(
         "vars.html.j2", __inventory=inventory, __thing="host_vars", __host=host, __vars=host_nice_vars
-    )  # Return a webpage
+    ), HTTPStatus.OK
 
 
 @bp.route("/inventory/<string:inventory>/group/<string:group>")
-def group(inventory: str, group: str) -> str:
+def group(inventory: str, group: str) -> tuple[str, int]:
     """Return a JSON response for a group."""
     if not isinstance(cmdb, AnsibleCMDB):
-        return "No CMDB found, please check the logs."
+        return "No CMDB found, please check the logs.", HTTPStatus.INTERNAL_SERVER_ERROR
+
+    if not cmdb.ready:
+        group_nice_vars = "CMDB not ready, please wait a moment and refresh."
+        return render_template(
+            "vars.html.j2", __inventory=inventory, __thing="group_vars", __host=group, __vars=group_nice_vars
+        ), HTTPStatus.TOO_EARLY
 
     cmdb_group_vars = cmdb.get_group(inventory, group)
 
@@ -120,4 +149,4 @@ def group(inventory: str, group: str) -> str:
 
     return render_template(
         "vars.html.j2", __inventory=inventory, __thing="group_vars", __host=group, __vars=group_nice_vars
-    )  # Return a webpage
+    ), HTTPStatus.OK  # Return a webpage

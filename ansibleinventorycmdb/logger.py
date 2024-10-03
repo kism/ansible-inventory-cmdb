@@ -44,10 +44,9 @@ logger = cast(CustomLogger, logging.getLogger(__name__))
 # The issue is that waitress, werkzeug (any any other modules that log) will log separately.
 # The aim is, remove the default handler from the flask App and create one on the root logger to apply config to all.
 
+
 # Pass in the whole app object to make it obvious we are configuring the logger object within the app object.
-def setup_logger(
-    app: Flask, logging_conf: dict, in_logger: logging.Logger | None = None
-) -> None:
+def setup_logger(app: Flask, logging_conf: dict, in_logger: logging.Logger | None = None) -> None:
     """Setup the logger, set configuration per logging_conf.
 
     Args:
@@ -72,15 +71,9 @@ def setup_logger(
         _add_file_handler(in_logger, logging_conf["path"])
 
     # Configure modules that are external and have their own loggers
-    logging.getLogger("waitress").setLevel(
-        logging.INFO
-    )  # Prod web server, info has useful info.
-    logging.getLogger("werkzeug").setLevel(
-        logging.DEBUG
-    )  # Only will be used in dev, debug logs incoming requests.
-    logging.getLogger("urllib3").setLevel(
-        logging.WARNING
-    )  # Bit noisy when set to info, used by requests module.
+    logging.getLogger("waitress").setLevel(logging.INFO)  # Prod web server, info has useful info.
+    logging.getLogger("werkzeug").setLevel(logging.DEBUG)  # Only will be used in dev, debug logs incoming requests.
+    logging.getLogger("urllib3").setLevel(logging.WARNING)  # Bit noisy when set to info, used by requests module.
 
     logger.info("Logger configuration set!")
 
@@ -92,16 +85,12 @@ def get_logger(name: str) -> CustomLogger:
 
 def _has_file_handler(in_logger: logging.Logger) -> bool:
     """Check if logger has a file handler."""
-    return any(
-        isinstance(handler, logging.FileHandler) for handler in in_logger.handlers
-    )
+    return any(isinstance(handler, logging.FileHandler) for handler in in_logger.handlers)
 
 
 def _has_console_handler(in_logger: logging.Logger) -> bool:
     """Check if logger has a console handler."""
-    return any(
-        isinstance(handler, logging.StreamHandler) for handler in in_logger.handlers
-    )
+    return any(isinstance(handler, logging.StreamHandler) for handler in in_logger.handlers)
 
 
 def _add_console_handler(in_logger: logging.Logger) -> None:
