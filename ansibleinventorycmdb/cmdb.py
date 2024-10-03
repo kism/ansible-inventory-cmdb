@@ -18,6 +18,7 @@ class AnsibleCMDB:
 
     def __init__(self, inventory_dict: dict, instance_path: str) -> None:
         """Initialise the Ansible CMDB object."""
+        self._dump_file = os.path.join(instance_path, "cmdb_dump.yml")
         self._cache_file = os.path.join(instance_path, "url_cache.pkl")
         self.inventories: dict[str, dict] = {}
         self.url_cache: dict = {}
@@ -54,6 +55,9 @@ class AnsibleCMDB:
         for inventory_tmp_dict in self.inventories.values():
             inventory_tmp_dict["hosts"] = self._build_cmdb_hosts(inventory_dict=inventory_tmp_dict)
             inventory_tmp_dict["groups"] = self._build_cmdb_groups(inventory_dict=inventory_tmp_dict)
+
+        with open(self._dump_file, "w") as dump_file:
+            yaml.dump(self.inventories, dump_file)
 
         logger.info("CMDB built")
         self.ready = True
