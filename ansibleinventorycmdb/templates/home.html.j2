@@ -15,9 +15,10 @@
         <table>
             <tr>
                 <th>Inventory</th>
-                <th>Source URLs</th>
+                <th>Source URL</th>
+                <th>Derived base URL</th>
             </tr>
-        {% for inventory, inventory_dict in inventories.items() %}<tr><td><a href="/inventory/{{ inventory }}">{{ inventory }}</a></td><td><a href="{{ inventory_dict['url'] }}">Inventory</a>, <a href="{{ inventory_dict['base_url'] }}">Base</a></td></tr>{% endfor %}
+        {% for inventory, inventory_dict in inventories.items() %}<tr><td><a href="/inventory/{{ inventory }}">{{ inventory }}</a></td><td><a href="{{ inventory_dict['url'] }}">source</a></td><td>{{ inventory_dict['base_url'] }}</td></tr>{% endfor %}
     </main>
 </body>
 
