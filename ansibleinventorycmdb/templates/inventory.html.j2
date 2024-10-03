@@ -2,7 +2,7 @@
 <html lang="en">
 
 <head>
-    <title>inventory: {{ inventory_name }}</title>
+    <title>Inventory: {{ inventory_name }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="X-Clacks-Overhead" content="GNU Terry Pratchett" />
     <link rel="stylesheet" href="/static/zy.css" />
@@ -11,7 +11,7 @@
 <body>
     <main>
         <h2>Ansible Inventory CMDB</h2>
-        <p><a href="/">inventories</a> / <b>{{ inventory_name }}</b></p>
+        <p><a href="/">Inventories</a> / <b>{{ inventory_name }}</b></p>
         <table id="Hosts">
             <tr>
                 {% for key, value in schema_mapping.items() %}<th onclick="sortTable({{ loop.index0 }})"">{{ value }}</th>{% endfor %}<th>Host Vars</th><th>Group Vars</th>

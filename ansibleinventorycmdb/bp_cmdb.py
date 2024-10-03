@@ -108,4 +108,4 @@ def group(inventory: str, group: str) -> str:
 
     group_nice_vars = "---\n" + group_nice_vars
 
-    return render_template("vars.html.j2", __inventory=inventory, __thing="group", __host=group, __vars=group_nice_vars)  # Return a webpage
+    return render_template("vars.html.j2", __inventory=inventory, __thing="group_vars", __host=group, __vars=group_nice_vars)  # Return a webpage
