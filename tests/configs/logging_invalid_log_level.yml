@@ -1,0 +1,7 @@
+---
+cmdb:
+flask:
+  TESTING: true
+logging:
+  level: INVALID
+  path: ""

@@ -79,5 +79,6 @@ Defaults are defined in config.py, and config loading and validation are handled
 - ~~Cleanup logging~~
 - ~~Use instance path properly~~
 - ~~Refresh every X hours~~
+- ~~Use YAML~~
 - Write real readme
-- Use YAML
+- fix that text block issue in the vars yaml
