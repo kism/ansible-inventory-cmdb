@@ -4,7 +4,6 @@ import threading
 import time
 from http import HTTPStatus
 
-import tomlkit.exceptions
 import yaml
 from flask import Blueprint, current_app, render_template
 
@@ -80,7 +79,7 @@ def inventory(inventory: str) -> tuple[str, int]:
             return render_template("error.html.j2", error=f"Inventory '{ inventory }' not found"), HTTPStatus.NOT_FOUND
         try:
             schema_mapping = dict(current_app.config["cmdb"][inventory]["schema_mapping"])
-        except tomlkit.exceptions.NonExistentKey:
+        except KeyError:
             return render_template(
                 "error.html.j2", error=f"Inventory '{ inventory }' found, but inventory schema not found"
             ), HTTPStatus.NOT_FOUND

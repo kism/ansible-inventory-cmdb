@@ -80,4 +80,5 @@ Defaults are defined in config.py, and config loading and validation are handled
 - ~~Use instance path properly~~
 - ~~Refresh every X hours~~
 - Write real readme
-- Use YAML
+- ~~Use YAML~~
+- fix that text block issue in the vars yaml

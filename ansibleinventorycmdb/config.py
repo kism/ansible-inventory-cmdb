@@ -5,7 +5,7 @@ import os
 import pwd
 import typing
 
-import tomlkit
+import yaml
 
 from .logger import get_logger
 
@@ -68,6 +68,9 @@ class AnsibleInventoryCmdbConfig:
         if not config:  # If no config is passed in (for testing), we load from a file.
             config = self._load_file()
 
+        logger.info(f"Default config: {DEFAULT_CONFIG}")
+        logger.info(f"Loaded config: {config}")
+
         self._config = self._merge_with_defaults(DEFAULT_CONFIG, config)
 
         self._validate_config()
@@ -104,8 +107,8 @@ class AnsibleInventoryCmdbConfig:
             raise ValueError(msg, self._config_path)
 
         try:
-            with open(self._config_path, "w", encoding="utf8") as toml_file:
-                tomlkit.dump(self._config, toml_file)
+            with open(self._config_path, "w", encoding="utf8") as yaml_file:
+                yaml.safe_dump(self._config, yaml_file)
         except PermissionError as exc:
             user_account = pwd.getpwuid(os.getuid())[0]
             err = f"Fix permissions: chown {user_account} {self._config_path}"
@@ -118,6 +121,13 @@ class AnsibleInventoryCmdbConfig:
         self._warn_unexpected_keys(DEFAULT_CONFIG, self._config, "<root>")
 
         # KISM-BOILERPLATE: Put your configuration validation here, set failure to True if it's a critical failure
+        for inventory_name, inventory_dict in self._config["cmdb"].items():
+            if not inventory_dict.get("inventory_url"):
+                failed_items.append(f"['cmdb']['{inventory_name}']['inventory_url'] is not set")
+
+            if not inventory_dict.get("schema_mapping"):
+                failed_items.append(f"['cmdb']['{inventory_name}']['schema_mapping'] is not set")
+
 
         # This is to assure that you don't accidentally test without the tmp_dir fixture.
         if self._config["flask"]["TESTING"] and not any(
@@ -148,15 +158,10 @@ class AnsibleInventoryCmdbConfig:
         return target_dict
 
     def _merge_with_defaults(self, base_dict: dict, target_dict: dict) -> dict:
-        """Merge a config with another (DEFAULT_CONFIG) to ensure every default key exists.
-
-        This is recursive, be careful.
-        """
+        """Merge a config with another (DEFAULT_CONFIG) to ensure every default key exists."""
         for key, value in base_dict.items():
-            if isinstance(value, dict) and key in target_dict:
-                self._merge_with_defaults(value, target_dict[key])
-            elif key not in target_dict:
-                target_dict[key] = target_dict.get(key, value)
+            if target_dict.get(key) is None:
+                target_dict[key] = value
 
         return target_dict
 
@@ -166,9 +171,9 @@ class AnsibleInventoryCmdbConfig:
         If a config file doesn't exist it will be created and written with current (default) configuration.
         """
         paths = [
-            os.path.join(self.instance_path, "config.toml"),
-            os.path.expanduser("~/.config/ansibleinventorycmdb/config.toml"),
-            "/etc/ansibleinventorycmdb/config.toml",
+            os.path.join(self.instance_path, "config.yml"),
+            os.path.expanduser("~/.config/ansibleinventorycmdb/config.yml"),
+            "/etc/ansibleinventorycmdb/config.yml",
         ]
 
         for path in paths:
@@ -193,5 +198,5 @@ class AnsibleInventoryCmdbConfig:
             msg = "Config path not set, cannot load config"
             raise ValueError(msg, self._config_path)
 
-        with open(self._config_path, encoding="utf8") as toml_file:
-            return tomlkit.load(toml_file)
+        with open(self._config_path, encoding="utf8") as yaml_file:
+            return yaml.safe_load(yaml_file)

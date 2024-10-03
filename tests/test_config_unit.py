@@ -10,7 +10,7 @@ DEFAULT_CONFIG = ansibleinventorycmdb.config.DEFAULT_CONFIG
 
 def test_config_permissions_error_read(place_test_config, tmp_path, mocker: pytest_mock.plugin.MockerFixture):
     """Mock a Permissions error with mock_open."""
-    place_test_config("testing_true_valid.toml", tmp_path)
+    place_test_config("testing_true_valid.yml", tmp_path)
 
     mock_open_func = mocker.mock_open(read_data="")
     mock_open_func.side_effect = PermissionError("Permission denied")
@@ -24,7 +24,7 @@ def test_config_permissions_error_read(place_test_config, tmp_path, mocker: pyte
 
 def test_config_permissions_error_write(place_test_config, tmp_path, mocker: pytest_mock.plugin.MockerFixture):
     """Mock a Permissions error with mock_open."""
-    place_test_config("testing_true_valid.toml", tmp_path)
+    place_test_config("testing_true_valid.yml", tmp_path)
 
     conf = ansibleinventorycmdb.config.AnsibleInventoryCmdbConfig(instance_path=tmp_path)
 
@@ -40,7 +40,7 @@ def test_config_permissions_error_write(place_test_config, tmp_path, mocker: pyt
 
 def test_dictionary_functions_of_config(place_test_config, tmp_path):
     """Test the functions in the config object that let it behave like a dictionary."""
-    place_test_config("testing_true_valid.toml", tmp_path)
+    place_test_config("testing_true_valid.yml", tmp_path)
 
     conf = ansibleinventorycmdb.config.AnsibleInventoryCmdbConfig(instance_path=tmp_path)
 
@@ -61,14 +61,14 @@ def test_dictionary_functions_of_config(place_test_config, tmp_path):
 
 def test_config_dictionary_merge(place_test_config, tmp_path, get_test_config):
     """Unit test the dictionary merge in _merge_with_defaults."""
-    place_test_config("testing_true_valid.toml", tmp_path)
+    place_test_config("testing_true_valid.yml", tmp_path)
 
     conf = ansibleinventorycmdb.config.AnsibleInventoryCmdbConfig(instance_path=tmp_path)
 
     test_dictionaries = [
         {},
-        get_test_config("logging_invalid.toml"),
-        get_test_config("testing_true_valid.toml"),
+        get_test_config("logging_invalid.yml"),
+        get_test_config("testing_true_valid.yml"),
     ]
 
     for test_dictionary in test_dictionaries:
@@ -88,7 +88,7 @@ def test_config_dictionary_merge(place_test_config, tmp_path, get_test_config):
 
 def test_config_dictionary_not_in_schema(place_test_config, tmp_path, caplog: pytest.LogCaptureFixture):
     """Unit test _warn_unexpected_keys."""
-    place_test_config("testing_true_valid.toml", tmp_path)
+    place_test_config("testing_true_valid.yml", tmp_path)
 
     conf = ansibleinventorycmdb.config.AnsibleInventoryCmdbConfig(instance_path=tmp_path)
 
@@ -105,7 +105,7 @@ def test_config_dictionary_not_in_schema(place_test_config, tmp_path, caplog: py
 
 def test_load_write_no_config_path(place_test_config, tmp_path):
     """Unit test the dictionary merge in _merge_with_defaults."""
-    place_test_config("testing_true_valid.toml", tmp_path)
+    place_test_config("testing_true_valid.yml", tmp_path)
 
     conf = ansibleinventorycmdb.config.AnsibleInventoryCmdbConfig(instance_path=tmp_path)
 

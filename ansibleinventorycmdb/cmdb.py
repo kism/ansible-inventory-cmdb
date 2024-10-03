@@ -3,7 +3,6 @@
 import os
 import pickle
 import re
-import tomlkit.exceptions
 
 import requests
 import yaml
@@ -70,7 +69,7 @@ class AnsibleCMDB:
         """Get an inventory."""
         try:
             return self.inventories[inventory]
-        except (KeyError, tomlkit.exceptions.NonExistentKey):
+        except (KeyError):
             return {}
 
     def get_host(self, inventory: str, host: str) -> dict:

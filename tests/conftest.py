@@ -8,7 +8,7 @@ import shutil
 from collections.abc import Callable
 
 import pytest
-import tomlkit
+import yaml
 from flask import Flask
 from flask.testing import FlaskClient, FlaskCliRunner
 
@@ -25,7 +25,7 @@ def pytest_configure():
 @pytest.fixture
 def app(tmp_path, get_test_config) -> Flask:
     """This fixture uses the default config within the flask app."""
-    return create_app(test_config=get_test_config("testing_true_valid.toml"), instance_path=tmp_path)
+    return create_app(test_config=get_test_config("testing_true_valid.yml"), instance_path=tmp_path)
 
 
 @pytest.fixture
@@ -45,11 +45,11 @@ def get_test_config() -> Callable:
     """Function returns a function, which is how it needs to be."""
 
     def _get_test_config(config_name: str) -> dict:
-        """Load all the .toml configs into a single dict."""
+        """Load all the .yml configs into a single dict."""
         filepath = os.path.join(TEST_CONFIGS_LOCATION, config_name)
 
         with open(filepath) as file:
-            return tomlkit.load(file)
+            return yaml.safe_load(file)
 
     return _get_test_config
 
@@ -65,6 +65,6 @@ def place_test_config() -> Callable:
         """Place config in tmp_path by name."""
         filepath = os.path.join(TEST_CONFIGS_LOCATION, config_name)
 
-        shutil.copyfile(filepath, os.path.join(path, "config.toml"))
+        shutil.copyfile(filepath, os.path.join(path, "config.yml"))
 
     return _place_test_config
