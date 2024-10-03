@@ -10,7 +10,8 @@
 
 <body>
     <main>
-        <br><p id="TITLE"><a href="/">inventories</a> / <b>{{ inventory_name }}</b></p>
+        <h2>Ansible Inventory CMDB</h2>
+        <p><a href="/">inventories</a> / <b>{{ inventory_name }}</b></p>
         <table id="Hosts">
             <tr>
                 {% for key, value in schema_mapping.items() %}<th onclick="sortTable({{ loop.index0 }})"">{{ value }}</th>{% endfor %}<th>Host Vars</th><th>Group Vars</th>

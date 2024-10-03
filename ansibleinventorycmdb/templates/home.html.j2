@@ -2,7 +2,7 @@
 <html lang="en">
 
 <head>
-    <title>{{ __app_nice_name }}</title>
+    <title>Ansible Inventory CMDB</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="X-Clacks-Overhead" content="GNU Terry Pratchett" />
     <link rel="stylesheet" href="/static/zy.css" />
@@ -10,13 +10,14 @@
 
 <body>
     <main>
-        <h1 id="TITLE">{{ __app_nice_name }}</h1>
+        <h2>Ansible Inventory CMDB</h2>
+        <p><b>inventories</b></p>
         <table>
             <tr>
                 <th>Inventory</th>
-                <th>Source URL</th>
+                <th>Source URLs</th>
             </tr>
-        {% for inventory, inventory_dict in inventories.items() %}<tr><td><a href="/inventory/{{ inventory }}">{{ inventory }}</a></td><td><a href="{{ inventory_dict['url'] }}">{{ inventory_dict['url'] }}</a></td></tr>{% endfor %}
+        {% for inventory, inventory_dict in inventories.items() %}<tr><td><a href="/inventory/{{ inventory }}">{{ inventory }}</a></td><td><a href="{{ inventory_dict['url'] }}">Inventory</a>, <a href="{{ inventory_dict['base_url'] }}">Base</a></td></tr>{% endfor %}
     </main>
 </body>
 

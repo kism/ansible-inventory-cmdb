@@ -292,7 +292,6 @@ table {
 table,
 th,
 td {
-  border-bottom: 1px solid black;
   padding: 7px;
   vertical-align: inherit;
   text-align: left;
