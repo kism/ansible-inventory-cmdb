@@ -159,10 +159,6 @@ ol {
   vertical-align: baseline;
 }
 
-table {
-  margin-bottom: 16px;
-}
-
 h1,
 h2,
 h3,
@@ -191,8 +187,7 @@ img {
 }
 
 code,
-pre,
-table {
+pre {
   font-family: "Fira Code", Consolas, "Lucida Console", monospace;
   background: #222;
   display: block;
@@ -246,7 +241,7 @@ mark {
 }
 
 a:link {
-  color: #48D1CC;
+  color: #48d1cc;
   text-decoration: none;
 }
 
@@ -256,17 +251,31 @@ a:focus {
 }
 
 a:visited {
-  color: 	#BA55D3;
+  color: #ba55d3;
+}
+
+table {
+  font-family: "Fira Code", Consolas, "Lucida Console", monospace;
+  display: block;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-bottom: 5px;
+  padding-bottom: 13px;
+  overflow-wrap: break-word;
 }
 
 tr {
   border-bottom: 2px solid rgb(255 255 255 / 12%);
+  border-right: 0px solid black;
+  border-left: 0px solid black;
   margin-bottom: 8px;
+  padding: 8px;
+  margin: 8px;
 }
 
 thead tr {
   border-bottom: 1px solid rgb(255 255 255 / 12%);
-  background: rgb(255 255 255 / 12%);
+  background: #444;
 }
 
 caption {
@@ -275,13 +284,21 @@ caption {
 
 th,
 td {
-  border-bottom: 1px solid black;
-  padding: 16px;
+  padding: 7px;
   vertical-align: inherit;
   text-align: left;
 }
 
+th {
+  background-color: #333;
+}
+
+td {
+  background-color: #222;
+}
+
 thead th {
+  background-color: #444;
   border: 0;
   border-bottom: 2px solid black;
   text-align: left;

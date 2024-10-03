@@ -43,9 +43,7 @@ def home() -> str:
 
     inventories = cmdb.get_inventories()
 
-    # inventory_names = list(inventories.keys())
-
-    return render_template("home.html.j2", __app_nice_name="Ansible Inventory CMDB", inventories=inventories)
+    return render_template("home.html.j2", inventories=inventories)
 
 
 # Flask homepage, generally don't have this as a blueprint.
@@ -86,7 +84,9 @@ def host(inventory: str, host: str) -> str:
 
     host_nice_vars = "---\n" + host_nice_vars
 
-    return render_template("vars.html.j2", __thing="host_vars", __host=host, __vars=host_nice_vars)  # Return a webpage
+    return render_template(
+        "vars.html.j2", __inventory=inventory, __thing="host_vars", __host=host, __vars=host_nice_vars
+    )  # Return a webpage
 
 
 @bp.route("/inventory/<string:inventory>/group/<string:group>")
@@ -108,4 +108,4 @@ def group(inventory: str, group: str) -> str:
 
     group_nice_vars = "---\n" + group_nice_vars
 
-    return render_template("vars.html.j2", __thing="group", __host=group, __vars=group_nice_vars)  # Return a webpage
+    return render_template("vars.html.j2", __inventory=inventory, __thing="group_vars", __host=group, __vars=group_nice_vars)  # Return a webpage
