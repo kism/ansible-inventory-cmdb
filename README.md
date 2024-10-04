@@ -1,5 +1,10 @@
 # ansibleinventorycmdb
 
+![Check](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/check.yml/badge.svg)
+![Test](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/check_types.yml/badge.svg)
+![Test](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/test.yml/badge.svg)
+[![codecov](https://codecov.io/gh/kism/ansible-inventory-cmdb/graph/badge.svg?token=yA1IpJESD1)](https://codecov.io/gh/kism/ansible-inventory-cmdb)
+
 Webapp that presents an internet hosted Ansible inventory as a nice webpage
 
 Config, check what gets created in the instance folder
