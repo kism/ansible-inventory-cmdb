@@ -56,7 +56,7 @@ class AnsibleCMDB:
             inventory_tmp_dict["groups"] = self._build_cmdb_groups(inventory_dict=inventory_tmp_dict)
 
         with open(self._dump_file, "w") as dump_file:
-            yaml.dump(self.inventories, dump_file)
+            yaml.dump(self.inventories, dump_file, explicit_start=True)
 
         logger.info("CMDB built")
         self.ready = True
@@ -69,7 +69,7 @@ class AnsibleCMDB:
         """Get an inventory."""
         try:
             return self.inventories[inventory]
-        except (KeyError):
+        except KeyError:
             return {}
 
     def get_host(self, inventory: str, host: str) -> dict:
@@ -165,7 +165,9 @@ class AnsibleCMDB:
 
             temp_text = "" if not response.ok else response.text
 
-            self.url_cache[url] = yaml.safe_load(temp_text)
+            temp_yaml = yaml.safe_load(temp_text)
+
+            self.url_cache[url] = temp_yaml
 
             with open(self._cache_file, "wb") as cache_file:
                 pickle.dump(self.url_cache, cache_file, pickle.HIGHEST_PROTOCOL)
