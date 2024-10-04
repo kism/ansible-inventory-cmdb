@@ -19,7 +19,7 @@ bp = Blueprint("ansibleinventorycmdb", __name__)
 cmdb: AnsibleCMDB | None = None
 
 
-def str_presenter(dumper, data) -> yaml.nodes.ScalarNode:  # noqa: ANN001 I have no idea how to fix this for mypy
+def str_presenter(dumper: yaml.representer.SafeRepresenter, data: str) -> yaml.nodes.ScalarNode:
     """YAML string presenter, use |- block."""
     if len(data.splitlines()) > 1:  # check for multiline string
         return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
