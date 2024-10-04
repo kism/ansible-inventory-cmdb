@@ -128,7 +128,6 @@ class AnsibleInventoryCmdbConfig:
             if not inventory_dict.get("schema_mapping"):
                 failed_items.append(f"['cmdb']['{inventory_name}']['schema_mapping'] is not set")
 
-
         # This is to assure that you don't accidentally test without the tmp_dir fixture.
         if self._config["flask"]["TESTING"] and not any(
             substring in str(self.instance_path) for substring in ["tmp", "temp", "TMP", "TEMP"]
