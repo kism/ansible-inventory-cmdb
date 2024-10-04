@@ -19,16 +19,15 @@ bp = Blueprint("ansibleinventorycmdb", __name__)
 cmdb: AnsibleCMDB | None = None
 
 
-def str_presenter(dumper, data):
+def str_presenter(dumper, data) -> yaml.nodes.ScalarNode:  # noqa: ANN001 I have no idea how to fix this for mypy
+    """YAML string presenter, use |- block."""
     if len(data.splitlines()) > 1:  # check for multiline string
         return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
     return dumper.represent_scalar("tag:yaml.org,2002:str", data)
 
 
 yaml.add_representer(str, str_presenter)
-
-# to use with safe_dump:
-yaml.representer.SafeRepresenter.add_representer(str, str_presenter)
+yaml.representer.SafeRepresenter.add_representer(str, str_presenter)  # Use with safe
 
 
 def start_cmdb_bp() -> None:
@@ -148,8 +147,6 @@ def group(inventory: str, group: str) -> tuple[str, int]:
     alphabetical_var_dict = dict(sorted(cmdb_group_vars.items(), key=lambda item: str(item[0])))
 
     group_nice_vars = yaml.dump(alphabetical_var_dict, explicit_start=True, default_flow_style=False, width=1000)
-
-    logger.warning(group_nice_vars)
 
     if group_nice_vars.strip() == "--- {}":
         group_nice_vars = "---"
