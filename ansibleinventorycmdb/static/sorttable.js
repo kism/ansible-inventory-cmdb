@@ -79,4 +79,20 @@ function sortTable(n) {
   }
 }
 
-sortTable(1);
+function getColumnIndexByHeaderText(table, headerText) {
+  var headers = table.getElementsByTagName("th");
+  for (var i = 0; i < headers.length; i++) {
+    if (headers[i].innerHTML.trim() === headerText) {
+      return i;
+    }
+  }
+  return -1; // Return -1 if the header text is not found
+}
+
+var table = document.getElementById("myTable");
+var columnIndex = getColumnIndexByHeaderText(table, "IP Address");
+if (columnIndex !== -1) {
+  sortTable(columnIndex);
+} else {
+  console.error("Column with header 'IP Address' not found, not sorting table");
+}
