@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ansibleinventorycmdb"
-version = "0.0.1"
+version = "0.0.2"
 description = ""
 authors = ["Kieran Gee <kieran.lost.the.game@gmail.com>"]
 readme = "README.md"
