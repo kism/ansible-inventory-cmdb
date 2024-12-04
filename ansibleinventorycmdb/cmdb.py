@@ -94,8 +94,8 @@ class AnsibleCMDB:
         for group in inventory_yaml:
             groups[group] = {}
 
-        for group in groups:
-            self._set_group_vars(group, groups[group], inventory_dict["base_url"])
+        for group, group_vars in groups.items():
+            self._set_group_vars(group, group_vars, inventory_dict["base_url"])
 
         return groups
 
@@ -108,8 +108,8 @@ class AnsibleCMDB:
             for host in inventory_yaml[group]["hosts"]:
                 hosts[host] = {"groups": [], "vars": {}}
 
-        for host in hosts:
-            hosts[host]["groups"] = self._get_groups_of_host(host, inventory_yaml)
+        for host, host_data in hosts.items():
+            host_data["groups"] = self._get_groups_of_host(host, inventory_yaml)
 
         for host in hosts:
             self._set_host_vars(host, hosts[host]["vars"], inventory_dict["base_url"])
@@ -161,9 +161,17 @@ class AnsibleCMDB:
         """Get a yaml file from a URL."""
         if url not in self.url_cache:
             logger.debug(f"Getting URL: {url}")
-            response = requests.get(url, timeout=5)
-
-            temp_text = "" if not response.ok else response.text
+            try:
+                response = requests.get(url, timeout=5)
+                temp_text = (
+                    "---" "\n" "error: true" "\n" f"message: error getting inventory, HTTP {response.status_code}"
+                    if not response.ok
+                    else response.text
+                )
+            except TimeoutError:
+                temp_text = "---" "\n" "error: true" "\n" "message: Timeout error" "\n" "exception: TimeoutError"
+            except Exception as e:  # noqa: BLE001 This is to prevent a big crash
+                temp_text = "---" "\n" "error: true" "\n" "message: Unhandled exception" "\n" f"exception: {e}"
 
             temp_yaml = yaml.safe_load(temp_text)
 
