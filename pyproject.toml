@@ -49,7 +49,7 @@ ignore = [
     "DTZ", # KG no need to specify timezone for time objects
 
     # Specific rules
-    "ANN101", # KG Why define self type for object functions...
+    # "ANN101", # KG Why define self type for object functions...
     "TD002",  # KG Verbose TODO, only I work on this project
     "TD003",  # KG Verbose TODO, only I work on this project
     "ISC001", # KG conflict in the formatter

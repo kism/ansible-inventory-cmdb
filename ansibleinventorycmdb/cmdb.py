@@ -94,7 +94,7 @@ class AnsibleCMDB:
         for group in inventory_yaml:
             groups[group] = {}
 
-        for group in groups:
+        for group in groups.items():
             self._set_group_vars(group, groups[group], inventory_dict["base_url"])
 
         return groups
@@ -108,7 +108,7 @@ class AnsibleCMDB:
             for host in inventory_yaml[group]["hosts"]:
                 hosts[host] = {"groups": [], "vars": {}}
 
-        for host in hosts:
+        for host in hosts.items():
             hosts[host]["groups"] = self._get_groups_of_host(host, inventory_yaml)
 
         for host in hosts:
