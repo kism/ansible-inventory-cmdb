@@ -161,9 +161,17 @@ class AnsibleCMDB:
         """Get a yaml file from a URL."""
         if url not in self.url_cache:
             logger.debug(f"Getting URL: {url}")
-            response = requests.get(url, timeout=5)
-
-            temp_text = "" if not response.ok else response.text
+            try:
+                response = requests.get(url, timeout=5)
+                temp_text = (
+                    "---" "\n" "error: true" "\n" f"message: error getting inventory, HTTP {response.status_code}"
+                    if not response.ok
+                    else response.text
+                )
+            except TimeoutError:
+                temp_text = "---" "\n" "error: true" "\n" "message: Timeout error" "\n" "exception: TimeoutError"
+            except Exception as e:  # noqa: BLE001 This is to prevent a big crash
+                temp_text = "---" "\n" "error: true" "\n" "message: Unhandled exception" "\n" f"exception: {e}"
 
             temp_yaml = yaml.safe_load(temp_text)
 
