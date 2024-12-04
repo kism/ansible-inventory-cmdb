@@ -9,8 +9,8 @@ readme = "README.md"
 python = "^3.10"
 flask = "^3.0"
 waitress = "^3.0"
-pyyaml = "^6.0.2"
-requests = "^2.32.3"
+pyyaml = "^6.0"
+requests = "^2.32"
 
 [tool.poetry.group.test.dependencies]
 pytest = "*"
