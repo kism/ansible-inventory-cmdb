@@ -86,9 +86,12 @@ class AnsibleCMDB:
         except KeyError:
             return {}
 
-    def _build_cmdb_groups(self, inventory_dict: dict) -> dict:
+    def _build_cmdb_groups(self, inventory_dict: dict) -> dict | None:
         """Build the CMDB groups from the inventory."""
         inventory_yaml = self._get_yaml(inventory_dict["url"])
+
+        if not inventory_yaml:
+            return {}
 
         groups: dict = {}
         for group in inventory_yaml:
@@ -99,9 +102,12 @@ class AnsibleCMDB:
 
         return groups
 
-    def _build_cmdb_hosts(self, inventory_dict: dict) -> dict:
+    def _build_cmdb_hosts(self, inventory_dict: dict) -> dict | None:
         """Build the CMDB hosts from the inventory."""
         inventory_yaml = self._get_yaml(inventory_dict["url"])
+
+        if not inventory_yaml:
+            return {}
 
         hosts: dict = {}
         for group in inventory_yaml:

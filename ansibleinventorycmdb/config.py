@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 DEFAULT_CONFIG: dict[str, dict] = {
     "cmdb": {
         "test_main": {
-            "inventory_url": "https://pytest.internal/inventory/main.yml",
+            "inventory_url": "https://raw.githubusercontent.com/kism/ansible-playbooks/refs/heads/main/inventory/main.yml",
             "schema_mapping": {
                 "ansible_host": "Hostname",
                 "ansible_host_description": "Description",

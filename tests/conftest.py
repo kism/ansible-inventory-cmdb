@@ -100,8 +100,10 @@ def mock_get_inventory_url(requests_mock):
         requests_mock.get("https://pytest.internal/inventory/group_vars/groupone.yml", text=""),
         requests_mock.get("https://pytest.internal/inventory/group_vars/grouptwo.yml", text=""),
         requests_mock.get("https://pytest.internal/inventory/group_vars/groupthree.yml", text=""),
+        requests_mock.get(
+            "https://raw.githubusercontent.com/kism/ansible-playbooks/refs/heads/main/inventory/main.yml", text=""
+        ),
     )
-
 
 
 @pytest.fixture(autouse=True)
