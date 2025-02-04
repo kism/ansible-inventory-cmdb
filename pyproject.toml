@@ -1,35 +1,44 @@
-[tool.poetry]
+[project]
 name = "ansibleinventorycmdb"
-version = "0.0.2"
-description = ""
-authors = ["Kieran Gee <kieran.lost.the.game@gmail.com>"]
+version = "1.0.0"
+description = "Generates a CMDB webpage from an ansible git repository"
+authors = [{ name = "Kieran Gee", email = "kieran.lost.the.game@gmail.com" }]
 readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "flask>=3.1.0",
+    "pyyaml>=6.0.2",
+    "requests>=2.32.3",
+    "waitress>=3.0.2",
+]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-flask = "^3.0"
-waitress = "^3.0"
-pyyaml = "^6.0"
-requests = "^2.32"
+[dependency-groups]
+dev = ["pyright"]
 
-[tool.poetry.group.test.dependencies]
-pytest = "*"
-pytest-cov = "*"
-pytest-mock = "*"
-tomlkit = "^0.12"
-detect-test-pollution = "*"
-pytest-random-order = "*"
-mypy = "*"
-ruff = "*"
-types-requests = "*"
-types-pyyaml = "*"
+type = [
+    "mypy",
+    "types-colorama",
+    "types-lxml",
+    "types-requests",
+]
 
-[tool.poetry.group.dev.dependencies]
-pylance = "*"
+lint = ["ruff"]
 
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+test = [
+    "pytest",
+    "tomlkit",
+    "pytest-cov",
+    "pytest-mock",
+    "pytest-random-order",
+    "types-requests",
+    "types-pyyaml",
+    "detect-test-pollution",
+    "requests-mock",
+]
+
+[tool.uv]
+default-groups = ["dev", "test", "type", "lint"]
+
 
 [tool.ruff]
 cache-dir = "~/.cache/ruff"

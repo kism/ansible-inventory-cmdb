@@ -1,5 +1,5 @@
-# Only for the boilerplate, this will get removed by create_my_new_project.py
-poetry.lock
+# Migrate from uv
+poetry.toml
 
 # Javascript, if we want to use eslint/scss-lintbiome for checking the html/css/javascript
 node_modules
