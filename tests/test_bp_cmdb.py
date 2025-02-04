@@ -33,9 +33,26 @@ def test_get(client: FlaskClient, test_cmdb_object, tmp_path):
         "/inventory/test_main",
         "/inventory/test_main/host/hostone",
         "/inventory/test_main/group/groupthree",
+        "/health",
     ]
 
     for endpoint in endpoints:
         response = client.get(endpoint)
         assert response.status_code == HTTPStatus.OK
 
+
+def test_get_uninitialised(client: FlaskClient, tmp_path):
+    """TEST: The default /hello/ response, This one uses the fixture in conftest.py."""
+
+    ansibleinventorycmdb.bp_cmdb.cmdb = None
+
+    endpoints = [
+        "/",
+        "/inventory/test_main",
+        "/inventory/test_main/host/hostone",
+        "/inventory/test_main/group/groupthree",
+    ]
+
+    for endpoint in endpoints:
+        response = client.get(endpoint)
+        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR

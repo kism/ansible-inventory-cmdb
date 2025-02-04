@@ -1,6 +1,6 @@
 [project]
 name = "ansibleinventorycmdb"
-version = "1.0.0"
+version = "1.0.1"
 description = "Generates a CMDB webpage from an ansible git repository"
 authors = [{ name = "Kieran Gee", email = "kieran.lost.the.game@gmail.com" }]
 readme = "README.md"

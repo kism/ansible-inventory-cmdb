@@ -1,11 +1,12 @@
 """Blueprint one's object..."""
 
+import json
 import threading
 import time
 from http import HTTPStatus
 
 import yaml
-from flask import Blueprint, current_app, render_template
+from flask import Blueprint, Response, current_app, render_template
 
 from ansibleinventorycmdb.cmdb import AnsibleCMDB
 
@@ -17,6 +18,8 @@ logger = get_logger(__name__)
 bp = Blueprint("ansibleinventorycmdb", __name__)
 
 cmdb: AnsibleCMDB | None = None
+
+version = None
 
 
 def str_presenter(dumper: yaml.representer.SafeRepresenter, data: str) -> yaml.nodes.ScalarNode:
@@ -154,3 +157,19 @@ def group(inventory: str, group: str) -> tuple[str, int]:
     return render_template(
         "vars.html.j2", __inventory=inventory, __thing="group_vars", __host=group, __vars=group_nice_vars
     ), HTTPStatus.OK  # Return a webpage
+
+
+@bp.route("/health")
+def health() -> tuple[Response, int]:
+    """Health check endpoint."""
+    global version  # noqa: PLW0603
+
+    health = {}
+
+    if not version:
+        from ansibleinventorycmdb import __version__
+
+        version = __version__
+
+    health["version"] = version
+    return Response(json.dumps(health), status=200, mimetype="application/json"), HTTPStatus.OK
