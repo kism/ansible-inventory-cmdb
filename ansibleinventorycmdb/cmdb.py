@@ -169,11 +169,11 @@ class AnsibleCMDB:
             logger.debug(f"Getting URL: {url}")
             try:
                 response = requests.get(url, timeout=5)
-                temp_text = (
-                    f"---\nerror: true\nmessage: error getting inventory, HTTP {response.status_code}"
-                    if not response.ok
-                    else response.text
-                )
+                if not response.ok:
+                    return {}
+
+                temp_text = response.text
+
             except TimeoutError:
                 temp_text = "---\nerror: true\nmessage: Timeout error\nexception: TimeoutError"
             except Exception as e:  # noqa: BLE001 This is to prevent a big crash
@@ -182,9 +182,7 @@ class AnsibleCMDB:
             if "No mock address" in temp_text or "Failed to resolve 'pytest.internal'" in temp_text:
                 raise ValueError(temp_text)
 
-
             temp_yaml = yaml.safe_load(temp_text)
-
 
             self.url_cache[url] = temp_yaml
 
