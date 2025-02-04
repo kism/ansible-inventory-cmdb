@@ -77,6 +77,7 @@ ignore = [
     "PT004",  # KG monkeypatches don't return.
     "ANN001", # KG Tests don't need type hints.
     "S311",   # KG I'll assume no real crypto will be done in PyTest.
+    "BLE001", # KG BaseException is fine in tests
 
 ]
 
