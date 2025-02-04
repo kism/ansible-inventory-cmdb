@@ -53,6 +53,6 @@ def create_app(test_config: dict | None = None, instance_path: str | None = None
     with app.app_context():
         bp_cmdb.start_cmdb_bp()
 
-    app.logger.info("Starting Web Server")
+    app.logger.info("Starting Web Server, Ansible Inventory CMDB Version: %s", __version__)
 
     return app
