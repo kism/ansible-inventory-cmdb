@@ -101,7 +101,6 @@ docstring-code-line-length = 40
 
 [tool.pytest.ini_options]
 addopts = [
-    "--import-mode=importlib",
     "--cov-context=test",
     "--cov=ansibleinventorycmdb",
     "--cov-report=term",
@@ -113,7 +112,7 @@ testpaths = ["tests"]
 show_contexts = true
 
 [tool.mypy]
-files = ["ansibleinventorycmdb", "tests"]
+files = ["ansibleinventorycmdb"]
 namespace_packages = true
 explicit_package_bases = true
 show_error_codes = true

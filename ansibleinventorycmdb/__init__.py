@@ -6,7 +6,7 @@ from flask import Flask
 
 from . import bp_cmdb, config, logger
 
-__version__ = "0.0.2"  # This is the version of the app, used in pyproject.toml, enforced in a test.
+__version__ = "1.0.0"  # This is the version of the app, used in pyproject.toml, enforced in a test.
 
 
 def create_app(test_config: dict | None = None, instance_path: str | None = None) -> Flask:
