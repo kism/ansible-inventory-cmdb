@@ -1,5 +1,11 @@
 ---
 cmdb:
+  test_main:
+    inventory_url: https://pytest.internal/inventory/main.yml
+    schema_mapping:
+      ansible_host: Hostname
+      ansible_host_description: Description
+
 flask:
   TESTING: false
 logging:

@@ -14,13 +14,10 @@ logger = get_logger(__name__)
 # Default config dictionary, also works as a schema
 DEFAULT_CONFIG: dict[str, dict] = {
     "cmdb": {
-        "kism_main": {
-            "inventory_url": "https://raw.githubusercontent.com/kism/ansible-playbooks/refs/heads/main/inventory/main.yml",
+        "test_main": {
+            "inventory_url": "https://pytest.internal/inventory/main.yml",
             "schema_mapping": {
                 "ansible_host": "Hostname",
-                "target_host_ip_address": "IP Address",
-                "target_host_mac_address": "MAC Address",
-                "proxmox_target_node": "PVE Node",
                 "ansible_host_description": "Description",
             },
         }

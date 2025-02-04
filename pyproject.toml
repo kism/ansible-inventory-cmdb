@@ -15,12 +15,7 @@ dependencies = [
 [dependency-groups]
 dev = ["pyright"]
 
-type = [
-    "mypy",
-    "types-colorama",
-    "types-lxml",
-    "types-requests",
-]
+type = ["mypy", "types-colorama", "types-lxml", "types-requests"]
 
 lint = ["ruff"]
 
@@ -72,20 +67,19 @@ ignore = [
     # Modules
     "ARG", # KG Unused function args -> fixtures nevertheless are functionally relevant
     "FBT", # KG Don't care about booleans as positional arguments in tests, e.g. via @pytest.mark.parametrize()
+    "ANN", # KG Don't care about annotations in tests
+    "D",   # KG Don't care about docstrings in tests
 
     # Specific rules
     "S101",   # KG asserts allowed in tests.
-    "ANN201", # KG Not really needed for pytest.
     "SLF001", # KG Accessing private members is needed for testing.
     "INP001", # KG __init__.py not needed for PyTest.
     "PT004",  # KG monkeypatches don't return.
     "ANN001", # KG Tests don't need type hints.
     "S311",   # KG I'll assume no real crypto will be done in PyTest.
+
 ]
-"create_my_new_project.py" = [ # If you have used this boilerplate to start making your app, you can delete this.
-    # Specific rules
-    "T201", # KG print() is fine for the scale of this file
-]
+
 
 [tool.ruff.lint.flake8-pytest-style]
 fixture-parentheses = false

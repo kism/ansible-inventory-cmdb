@@ -6,10 +6,13 @@ on:
     branches:
       - main
       - test
+    paths-ignore:
+      - "**/README*"
 
 jobs:
   mypy:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
@@ -18,22 +21,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Run image
-        uses: abatilo/actions-poetry@v2
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
 
-      - name: Configure Poetry to install dependencies in virtualenv
-        run: |
-          poetry config virtualenvs.create true --local
-          poetry config virtualenvs.in-project true --local
-
-      - name: Define a cache for the virtual environment based on the dependencies lock file
-        uses: actions/cache@v4
-        with:
-          path: ./.venv
-          key: venv-${{ hashFiles('poetry.lock') }}
-
-      - name: Install dependencies
-        run: poetry install --without dev
+      - name: Install the project
+        run: uv sync --no-group test --no-group lint --no-group dev
 
       - name: Check types with mypy
-        run: .venv/bin/mypy
+        run: uv run mypy

@@ -1,0 +1,24 @@
+---
+all:
+  hosts:
+    hostone:
+      ansible_host: hostone.pytest.internal
+      ansible_host_description: Host One
+    hosttwo:
+      ansible_host: hosttwo.pytest.internal
+      ansible_host_description: Host Two
+
+
+# Server Type
+groupone:
+  hosts:
+    hostone:
+
+grouptwo:
+  hosts:
+    grouptwo:
+
+groupthree:
+  hosts:
+    hostone:
+    hosttwo:

@@ -14,6 +14,8 @@ def test_config_valid(tmp_path, get_test_config):
     app = create_app(get_test_config("testing_true_valid.yml"), instance_path=tmp_path)
     assert app.testing, "Flask testing config item not being set correctly."
 
+
+def test_config_invalid(tmp_path, get_test_config):
     # TEST: Testing attribute not set.
     # The config loaded sets testing to False, do not use this config for any other test.
     app = create_app(get_test_config("testing_false_valid.yml"), instance_path=tmp_path)

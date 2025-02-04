@@ -87,12 +87,12 @@ def inventory(inventory: str) -> tuple[str, int]:
     else:
         inventory_dict = cmdb.get_inventory(inventory)
         if inventory_dict == {}:
-            return render_template("error.html.j2", error=f"Inventory '{ inventory }' not found"), HTTPStatus.NOT_FOUND
+            return render_template("error.html.j2", error=f"Inventory '{inventory}' not found"), HTTPStatus.NOT_FOUND
         try:
             schema_mapping = dict(current_app.config["cmdb"][inventory]["schema_mapping"])
         except KeyError:
             return render_template(
-                "error.html.j2", error=f"Inventory '{ inventory }' found, but inventory schema not found"
+                "error.html.j2", error=f"Inventory '{inventory}' found, but inventory schema not found"
             ), HTTPStatus.NOT_FOUND
 
     return render_template(
@@ -116,7 +116,7 @@ def host(inventory: str, host: str) -> tuple[str, int]:
         try:
             cmdb_host_vars = cmdb.get_host(inventory, host)["vars"]
         except KeyError:
-            return render_template("error.html.j2", error=f"Host '{ host }' not found"), 404
+            return render_template("error.html.j2", error=f"Host '{host}' not found"), 404
 
         alphabetical_var_dict = dict(sorted(cmdb_host_vars.items(), key=lambda item: str(item[0])))
 
