@@ -23,7 +23,7 @@
             </tr>{% endfor %}
         </table>
         {% if groups %}
-        <h3>Group JSON</h3>
+        <h4>Group JSON</h4>
         <p>{% for group in groups %}<a href="/inventory/{{ inventory_name }}/group/{{ group }}/json">{{ group }}</a>{% if not loop.last %} | {% endif %}{% endfor %}</p>
         {% endif %}
     </main>
