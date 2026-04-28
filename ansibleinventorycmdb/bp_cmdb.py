@@ -7,9 +7,10 @@ from http import HTTPStatus
 
 import yaml
 from flask import Blueprint, Response, current_app, render_template
+
 from ansibleinventorycmdb.cmdb import AnsibleCMDB
 
-from .cache import cache
+from .cache import cache, CACHE_TIMEOUT
 from .logger import get_logger
 
 logger = get_logger(__name__)
@@ -54,10 +55,12 @@ def refresh_cmdb() -> None:
             if not cmdb.ready:
                 logger.info("CMDB not ready, building...")
                 cmdb.build()
+                cache.clear()
 
             if cmdb.refresh_required:
                 logger.info("CMDB refresh required, refreshing...")
                 cmdb.refresh()
+                cache.clear()
 
             while True:
                 logger.debug("Sleeping before refresh")
@@ -67,6 +70,7 @@ def refresh_cmdb() -> None:
 
 
 @bp.route("/")
+@cache.cached(timeout=CACHE_TIMEOUT)
 def home() -> tuple[str, int]:
     """Home webpage."""
     if not isinstance(cmdb, AnsibleCMDB):
@@ -79,6 +83,7 @@ def home() -> tuple[str, int]:
 
 # Flask homepage, generally don't have this as a blueprint.
 @bp.route("/inventory/<string:inventory>")
+@cache.cached(timeout=CACHE_TIMEOUT)
 def inventory(inventory: str) -> tuple[str, int]:
     """Flask home."""
     if not isinstance(cmdb, AnsibleCMDB):
@@ -112,6 +117,7 @@ def inventory(inventory: str) -> tuple[str, int]:
 
 
 @bp.route("/inventory/<string:inventory>/host/<string:host>")
+@cache.cached(timeout=CACHE_TIMEOUT)
 def host(inventory: str, host: str) -> tuple[str, int]:
     """Return a JSON response for a host."""
     if not isinstance(cmdb, AnsibleCMDB):
@@ -139,6 +145,7 @@ def host(inventory: str, host: str) -> tuple[str, int]:
 
 
 @bp.route("/inventory/<string:inventory>/group/<string:group>")
+@cache.cached(timeout=CACHE_TIMEOUT)
 def group(inventory: str, group: str) -> tuple[str, int]:
     """Return a JSON response for a group."""
     if not isinstance(cmdb, AnsibleCMDB):
@@ -165,6 +172,7 @@ def group(inventory: str, group: str) -> tuple[str, int]:
 
 
 @bp.route("/inventory/<string:inventory>/group/<string:group>/json")
+@cache.cached(timeout=CACHE_TIMEOUT)
 def group_json(inventory: str, group: str) -> tuple[Response, int]:
     """Return a JSON response mapping hostnames to their vars for a group."""
     if not isinstance(cmdb, AnsibleCMDB):
