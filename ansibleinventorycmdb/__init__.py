@@ -5,6 +5,7 @@ from pprint import pformat
 from flask import Flask
 
 from . import bp_cmdb, config, logger
+from .cache import cache
 
 __version__ = "1.0.1"  # This is the version of the app, used in pyproject.toml, enforced in a test.
 
@@ -54,5 +55,7 @@ def create_app(test_config: dict | None = None, instance_path: str | None = None
         bp_cmdb.start_cmdb_bp()
 
     app.logger.info("Starting Web Server, Ansible Inventory CMDB Version: %s", __version__)
+
+    cache.init_app(app)
 
     return app

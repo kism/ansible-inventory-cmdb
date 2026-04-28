@@ -22,9 +22,27 @@
                 <td>{% for group in host_vars['groups'] %}<a href="/inventory/{{ inventory_name }}/group/{{ group }}">{{ group }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td>
             </tr>{% endfor %}
         </table>
+        {% if groups_data %}
+        <h3>Group JSON</h3>
+        <label for="group-select">Group: </label>
+        <select id="group-select" onchange="showGroupJson()">
+            {% for group in groups_data %}<option value="{{ group }}">{{ group }}</option>{% endfor %}
+        </select>
+        <pre id="group-json-display"></pre>
+        {% endif %}
     </main>
 </body>
 
 <script src="/static/sorttable.js"></script>
+{% if groups_data %}
+<script>
+const groupsData = {{ groups_data | tojson }};
+function showGroupJson() {
+    const group = document.getElementById('group-select').value;
+    document.getElementById('group-json-display').textContent = JSON.stringify(groupsData[group], null, 2);
+}
+showGroupJson();
+</script>
+{% endif %}
 
 </html>

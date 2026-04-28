@@ -22,7 +22,7 @@ Install poetry with pipx `pipx install poetry`
 ```bash
 poetry install
 poetry shell
-flask --app ansibleinventorycmdb run --port 5000
+flask --app ansibleinventorycmdb run --port 5100
 ```
 
 ### Run Prod
@@ -38,12 +38,3 @@ poetry install --only main
     --threads 4 \
     --call ansibleinventorycmdb:create_app
 ```
-
-## Todo
-
-- ~~Cleanup logging~~
-- ~~Use instance path properly~~
-- ~~Refresh every X hours~~
-- ~~Use YAML~~
-- ~~Write real readme~~
-- ~~fix that text block issue in the vars yaml~~

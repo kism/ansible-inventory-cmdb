@@ -7,9 +7,9 @@ from http import HTTPStatus
 
 import yaml
 from flask import Blueprint, Response, current_app, render_template
-
 from ansibleinventorycmdb.cmdb import AnsibleCMDB
 
+from .cache import cache
 from .logger import get_logger
 
 logger = get_logger(__name__)
@@ -98,11 +98,24 @@ def inventory(inventory: str) -> tuple[str, int]:
                 "error.html.j2", error=f"Inventory '{inventory}' found, but inventory schema not found"
             ), HTTPStatus.NOT_FOUND
 
+    groups_data: dict[str, dict] = {}
+    if inventory_dict.get("hosts"):
+        hosts_data: dict = inventory_dict["hosts"]
+        groups_data["all"] = {hostname: host_data["vars"] for hostname, host_data in hosts_data.items()}
+        for hostname, host_data in hosts_data.items():
+            for group in host_data["groups"]:
+                if group == "all":
+                    continue
+                if group not in groups_data:
+                    groups_data[group] = {}
+                groups_data[group][hostname] = host_data["vars"]
+
     return render_template(
         "inventory.html.j2",
         inventory_name=inventory,
         inventory_dict=inventory_dict,
         schema_mapping=schema_mapping,
+        groups_data=groups_data,
     ), HTTPStatus.OK
 
 
