@@ -1,3 +1,5 @@
+import time
+
 from ansibleinventorycmdb.cmdb import AnsibleCMDB
 
 
@@ -11,8 +13,6 @@ def test_object_creation(tmp_path, get_test_config):
     assert cmdb is not None
 
     cmdb.refresh()
-
-    import time
 
     while cmdb.refresh_required:
         time.sleep(1)
