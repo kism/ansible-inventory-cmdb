@@ -10,7 +10,9 @@ from flask import Blueprint, Response, current_app, render_template
 
 from ansibleinventorycmdb.cmdb import AnsibleCMDB
 
+from .cache import CACHE_TIMEOUT, cache
 from .logger import get_logger
+from .version import __version__
 
 logger = get_logger(__name__)
 
@@ -54,10 +56,12 @@ def refresh_cmdb() -> None:
             if not cmdb.ready:
                 logger.info("CMDB not ready, building...")
                 cmdb.build()
+                cache.clear()
 
             if cmdb.refresh_required:
                 logger.info("CMDB refresh required, refreshing...")
                 cmdb.refresh()
+                cache.clear()
 
             while True:
                 logger.debug("Sleeping before refresh")
@@ -67,6 +71,7 @@ def refresh_cmdb() -> None:
 
 
 @bp.route("/")
+@cache.cached(timeout=CACHE_TIMEOUT)
 def home() -> tuple[str, int]:
     """Home webpage."""
     if not isinstance(cmdb, AnsibleCMDB):
@@ -79,6 +84,7 @@ def home() -> tuple[str, int]:
 
 # Flask homepage, generally don't have this as a blueprint.
 @bp.route("/inventory/<string:inventory>")
+@cache.cached(timeout=CACHE_TIMEOUT)
 def inventory(inventory: str) -> tuple[str, int]:
     """Flask home."""
     if not isinstance(cmdb, AnsibleCMDB):
@@ -98,15 +104,21 @@ def inventory(inventory: str) -> tuple[str, int]:
                 "error.html.j2", error=f"Inventory '{inventory}' found, but inventory schema not found"
             ), HTTPStatus.NOT_FOUND
 
+    groups: list[str] = []
+    if inventory_dict.get("hosts"):
+        groups = ["all"] + [g for g in inventory_dict.get("groups", {}) if g != "all"]
+
     return render_template(
         "inventory.html.j2",
         inventory_name=inventory,
         inventory_dict=inventory_dict,
         schema_mapping=schema_mapping,
+        groups=groups,
     ), HTTPStatus.OK
 
 
 @bp.route("/inventory/<string:inventory>/host/<string:host>")
+@cache.cached(timeout=CACHE_TIMEOUT)
 def host(inventory: str, host: str) -> tuple[str, int]:
     """Return a JSON response for a host."""
     if not isinstance(cmdb, AnsibleCMDB):
@@ -129,11 +141,16 @@ def host(inventory: str, host: str) -> tuple[str, int]:
             host_nice_vars = "---"
 
     return render_template(
-        "vars.html.j2", __inventory=inventory, __thing="host_vars", __host=host, __vars=host_nice_vars
+        "vars.html.j2",
+        __inventory=inventory,
+        __thing="host_vars",
+        __host=host,
+        __vars=host_nice_vars,
     ), HTTPStatus.OK
 
 
 @bp.route("/inventory/<string:inventory>/group/<string:group>")
+@cache.cached(timeout=CACHE_TIMEOUT)
 def group(inventory: str, group: str) -> tuple[str, int]:
     """Return a JSON response for a group."""
     if not isinstance(cmdb, AnsibleCMDB):
@@ -155,21 +172,56 @@ def group(inventory: str, group: str) -> tuple[str, int]:
         group_nice_vars = "---"
 
     return render_template(
-        "vars.html.j2", __inventory=inventory, __thing="group_vars", __host=group, __vars=group_nice_vars
+        "vars.html.j2",
+        __inventory=inventory,
+        __thing="group_vars",
+        __host=group,
+        __vars=group_nice_vars,
     ), HTTPStatus.OK  # Return a webpage
+
+
+@bp.route("/inventory/<string:inventory>/group/<string:group>/json")
+@cache.cached(timeout=CACHE_TIMEOUT)
+def group_json(inventory: str, group: str) -> tuple[Response, int]:
+    """Return a JSON response mapping hostnames to their vars for a group."""
+    if not isinstance(cmdb, AnsibleCMDB):
+        return (
+            Response(json.dumps({"error": "No CMDB found"}), status=500, mimetype="application/json"),
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+        )
+
+    if not cmdb.ready:
+        return (
+            Response(json.dumps({"error": "CMDB not ready"}), status=503, mimetype="application/json"),
+            HTTPStatus.SERVICE_UNAVAILABLE,
+        )
+
+    inventory_dict = cmdb.get_inventory(inventory)
+    if inventory_dict == {}:
+        err = json.dumps({"error": f"Inventory '{inventory}' not found"})
+        return Response(err, status=404, mimetype="application/json"), HTTPStatus.NOT_FOUND
+
+    hosts_data: dict = inventory_dict.get("hosts", {})
+    if group == "all":
+        group_hosts = {hostname: host_data["vars"] for hostname, host_data in hosts_data.items()}
+    else:
+        group_hosts = {
+            hostname: host_data["vars"]
+            for hostname, host_data in hosts_data.items()
+            if group in host_data.get("groups", [])
+        }
+        if not group_hosts and group not in inventory_dict.get("groups", {}):
+            return (
+                Response(json.dumps({"error": f"Group '{group}' not found"}), status=404, mimetype="application/json"),
+                HTTPStatus.NOT_FOUND,
+            )
+
+    return Response(json.dumps(group_hosts, indent=2), status=200, mimetype="application/json"), HTTPStatus.OK
 
 
 @bp.route("/health")
 def health() -> tuple[Response, int]:
     """Health check endpoint."""
-    global version  # noqa: PLW0603
-
     health = {}
-
-    if not version:
-        from ansibleinventorycmdb import __version__
-
-        version = __version__
-
-    health["version"] = version
+    health["version"] = __version__
     return Response(json.dumps(health), status=200, mimetype="application/json"), HTTPStatus.OK

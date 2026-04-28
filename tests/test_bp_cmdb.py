@@ -41,6 +41,21 @@ def test_get(client: FlaskClient, test_cmdb_object, tmp_path):
         assert response.status_code == HTTPStatus.OK
 
 
+def test_get_json(client: FlaskClient, test_cmdb_object, tmp_path):
+    """TEST: The default /hello/ response, This one uses the fixture in conftest.py."""
+
+    ansibleinventorycmdb.bp_cmdb.cmdb = test_cmdb_object
+
+    endpoints = [
+        "/inventory/test_main/group/groupthree/json",
+    ]
+
+    for endpoint in endpoints:
+        response = client.get(endpoint)
+        assert response.status_code == HTTPStatus.OK
+        assert response.mimetype == "application/json"
+
+
 def test_get_uninitialised(client: FlaskClient, tmp_path):
     """TEST: The default /hello/ response, This one uses the fixture in conftest.py."""
 

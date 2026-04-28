@@ -9,6 +9,7 @@ import pytest_mock
 from flask import Flask
 
 import ansibleinventorycmdb.logger
+from ansibleinventorycmdb.logger import _add_file_handler, _set_log_level
 
 
 @pytest.fixture
@@ -28,8 +29,6 @@ def logger() -> Generator:
 
 def test_logging_permissions_error(logger, tmp_path, mocker: pytest_mock.plugin.MockerFixture):
     """Test logging, mock a permission error."""
-    from ansibleinventorycmdb.logger import _add_file_handler
-
     mock_open_func = mocker.mock_open(read_data="")
     mock_open_func.side_effect = PermissionError("Permission denied")
 
@@ -42,8 +41,6 @@ def test_logging_permissions_error(logger, tmp_path, mocker: pytest_mock.plugin.
 
 def test_config_logging_to_dir(logger, tmp_path):
     """TEST: Correct exception is caught when you try log to a folder."""
-    from ansibleinventorycmdb.logger import _add_file_handler
-
     with pytest.raises(IsADirectoryError):
         _add_file_handler(logger, tmp_path)
 
@@ -85,8 +82,6 @@ def test_handler_file_added(logger, tmp_path, app: Flask):
 )
 def test_set_log_level(log_level_in: str | int, log_level_expected: int, logger):
     """Test if _set_log_level results in correct log_level."""
-    from ansibleinventorycmdb.logger import _set_log_level
-
     # TEST: Logger ends up with correct values
     _set_log_level(logger, log_level_in)
     assert logger.getEffectiveLevel() == log_level_expected

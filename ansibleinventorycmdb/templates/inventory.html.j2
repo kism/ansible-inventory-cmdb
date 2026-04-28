@@ -22,6 +22,10 @@
                 <td>{% for group in host_vars['groups'] %}<a href="/inventory/{{ inventory_name }}/group/{{ group }}">{{ group }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td>
             </tr>{% endfor %}
         </table>
+        {% if groups %}
+        <h4>Group JSON</h4>
+        <code style="width: fit-content;">{% for group in groups %}<a href="/inventory/{{ inventory_name }}/group/{{ group }}/json">{{ group }}</a>{% if not loop.last %} | {% endif %}{% endfor %}</code>
+        {% endif %}
     </main>
 </body>
 
