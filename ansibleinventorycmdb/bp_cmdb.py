@@ -10,8 +10,9 @@ from flask import Blueprint, Response, current_app, render_template
 
 from ansibleinventorycmdb.cmdb import AnsibleCMDB
 
-from .cache import cache, CACHE_TIMEOUT
+from .cache import CACHE_TIMEOUT, cache
 from .logger import get_logger
+from .version import __version__
 
 logger = get_logger(__name__)
 
@@ -213,14 +214,6 @@ def group_json(inventory: str, group: str) -> tuple[Response, int]:
 @bp.route("/health")
 def health() -> tuple[Response, int]:
     """Health check endpoint."""
-    global version  # noqa: PLW0603
-
     health = {}
-
-    if not version:
-        from ansibleinventorycmdb import __version__
-
-        version = __version__
-
-    health["version"] = version
+    health["version"] = __version__
     return Response(json.dumps(health), status=200, mimetype="application/json"), HTTPStatus.OK

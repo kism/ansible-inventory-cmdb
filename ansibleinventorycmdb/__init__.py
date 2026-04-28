@@ -6,8 +6,7 @@ from flask import Flask
 
 from . import bp_cmdb, config, logger
 from .cache import cache
-
-__version__ = "1.0.1"  # This is the version of the app, used in pyproject.toml, enforced in a test.
+from .version import __version__
 
 
 def create_app(test_config: dict | None = None, instance_path: str | None = None) -> Flask:

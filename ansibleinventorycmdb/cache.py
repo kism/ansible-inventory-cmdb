@@ -1,4 +1,4 @@
-# Cache instance module
+"""Cache instance module."""
 
 from flask_caching import Cache
 

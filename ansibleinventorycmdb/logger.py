@@ -34,7 +34,7 @@ logging.setLoggerClass(CustomLogger)
 
 # This is where we log to in this module, following the standard of every module.
 # I don't use the function so we can have this at the top
-logger = cast(CustomLogger, logging.getLogger(__name__))
+logger = cast("CustomLogger", logging.getLogger(__name__))
 
 
 # In flask the root logger doesn't have any handlers, its all in app.logger
@@ -80,7 +80,7 @@ def setup_logger(app: Flask, logging_conf: dict, in_logger: logging.Logger | Non
 
 def get_logger(name: str) -> CustomLogger:
     """Get a logger with the name provided."""
-    return cast(CustomLogger, logging.getLogger(name))
+    return cast("CustomLogger", logging.getLogger(name))
 
 
 def _has_file_handler(in_logger: logging.Logger) -> bool:
