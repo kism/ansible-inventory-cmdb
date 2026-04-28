@@ -141,7 +141,11 @@ def host(inventory: str, host: str) -> tuple[str, int]:
             host_nice_vars = "---"
 
     return render_template(
-        "vars.html.j2", __inventory=inventory, __thing="host_vars", __host=host, __vars=host_nice_vars
+        "vars.html.j2",
+        __inventory=inventory,
+        __thing="host_vars",
+        __host=host,
+        __vars=host_nice_vars,
     ), HTTPStatus.OK
 
 
@@ -168,7 +172,11 @@ def group(inventory: str, group: str) -> tuple[str, int]:
         group_nice_vars = "---"
 
     return render_template(
-        "vars.html.j2", __inventory=inventory, __thing="group_vars", __host=group, __vars=group_nice_vars
+        "vars.html.j2",
+        __inventory=inventory,
+        __thing="group_vars",
+        __host=group,
+        __vars=group_nice_vars,
     ), HTTPStatus.OK  # Return a webpage
 
 
