@@ -98,24 +98,16 @@ def inventory(inventory: str) -> tuple[str, int]:
                 "error.html.j2", error=f"Inventory '{inventory}' found, but inventory schema not found"
             ), HTTPStatus.NOT_FOUND
 
-    groups_data: dict[str, dict] = {}
+    groups: list[str] = []
     if inventory_dict.get("hosts"):
-        hosts_data: dict = inventory_dict["hosts"]
-        groups_data["all"] = {hostname: host_data["vars"] for hostname, host_data in hosts_data.items()}
-        for hostname, host_data in hosts_data.items():
-            for group in host_data["groups"]:
-                if group == "all":
-                    continue
-                if group not in groups_data:
-                    groups_data[group] = {}
-                groups_data[group][hostname] = host_data["vars"]
+        groups = ["all"] + [g for g in inventory_dict.get("groups", {}) if g != "all"]
 
     return render_template(
         "inventory.html.j2",
         inventory_name=inventory,
         inventory_dict=inventory_dict,
         schema_mapping=schema_mapping,
-        groups_data=groups_data,
+        groups=groups,
     ), HTTPStatus.OK
 
 
@@ -170,6 +162,44 @@ def group(inventory: str, group: str) -> tuple[str, int]:
     return render_template(
         "vars.html.j2", __inventory=inventory, __thing="group_vars", __host=group, __vars=group_nice_vars
     ), HTTPStatus.OK  # Return a webpage
+
+
+@bp.route("/inventory/<string:inventory>/group/<string:group>/json")
+def group_json(inventory: str, group: str) -> tuple[Response, int]:
+    """Return a JSON response mapping hostnames to their vars for a group."""
+    if not isinstance(cmdb, AnsibleCMDB):
+        return (
+            Response(json.dumps({"error": "No CMDB found"}), status=500, mimetype="application/json"),
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+        )
+
+    if not cmdb.ready:
+        return (
+            Response(json.dumps({"error": "CMDB not ready"}), status=503, mimetype="application/json"),
+            HTTPStatus.SERVICE_UNAVAILABLE,
+        )
+
+    inventory_dict = cmdb.get_inventory(inventory)
+    if inventory_dict == {}:
+        err = json.dumps({"error": f"Inventory '{inventory}' not found"})
+        return Response(err, status=404, mimetype="application/json"), HTTPStatus.NOT_FOUND
+
+    hosts_data: dict = inventory_dict.get("hosts", {})
+    if group == "all":
+        group_hosts = {hostname: host_data["vars"] for hostname, host_data in hosts_data.items()}
+    else:
+        group_hosts = {
+            hostname: host_data["vars"]
+            for hostname, host_data in hosts_data.items()
+            if group in host_data.get("groups", [])
+        }
+        if not group_hosts and group not in inventory_dict.get("groups", {}):
+            return (
+                Response(json.dumps({"error": f"Group '{group}' not found"}), status=404, mimetype="application/json"),
+                HTTPStatus.NOT_FOUND,
+            )
+
+    return Response(json.dumps(group_hosts, indent=2), status=200, mimetype="application/json"), HTTPStatus.OK
 
 
 @bp.route("/health")
