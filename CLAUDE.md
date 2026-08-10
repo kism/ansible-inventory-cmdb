@@ -48,6 +48,7 @@ definition time, so any module with a `TYPE_CHECKING`-only import used in a sign
 [`site.py`](src/ansibleinventorycmdb/site.py) renders every page up front instead of per request.
 [`worker/`](worker/) is a separate uv project: a cron-triggered Python Worker that builds the CMDB and PUTs the
 result into a public R2 bucket. `uv run ansibleinventorycmdb-generate <dir>` does the same thing to a directory.
+User-facing docs for this mode live in [README_Wrangler.md](README_Wrangler.md), not README.md.
 
 - `site.py` must not import FastAPI. It is the lower layer; `routes.py` imports `dump_vars`, `group_list` and
   `group_hosts` from it so both modes share one implementation.

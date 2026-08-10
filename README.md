@@ -42,36 +42,8 @@ There is also a console script, `ansibleinventorycmdb`, which serves on `AIC_HOS
 
 ### Run as a Cloudflare Worker
 
-An alternate run mode: instead of a server, a cron-triggered Python Worker builds the CMDB once a day and writes
-every page into an R2 bucket, which serves them as static files. Same code, same templates — see
-[`site.py`](src/ansibleinventorycmdb/site.py), which the web app and the Worker both render through.
-
-Requires **Workers Paid**. Building the real inventory takes ~75 subrequests (one per host and group var file,
-times two paths), over the free plan's cap of 50.
-
-```bash
-wrangler r2 bucket create ansible-inventory-cmdb   # then enable public access on it in the dashboard
-cd worker
-$EDITOR src/config.yml                             # same schema as instance/config.yml
-uv run pywrangler dev                              # then trigger a build, see below
-uv run pywrangler deploy
-```
-
-Cron Triggers don't fire during local development, so trigger a build by hand:
-
-```bash
-curl http://localhost:8787/cdn-cgi/handler/scheduled
-```
-
-The bucket has no index document, so the site's entry point is **`/index.html`**, not `/`. Every page is written
-as `<path>/index.html` and linked that way. If you put a custom domain in front of the bucket, a redirect rule
-from `/` to `/index.html` tidies that up.
-
-To render the same site to a local directory instead:
-
-```bash
-uv run ansibleinventorycmdb-generate ./out
-```
+There is a second run mode with no server at all: a cron-triggered Python Worker renders every page into a public
+R2 bucket once a day. See [README_Wrangler.md](README_Wrangler.md).
 
 ## Configuration
 
