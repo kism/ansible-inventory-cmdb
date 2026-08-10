@@ -3,30 +3,33 @@
 import tomllib
 from pathlib import Path
 
-import ansibleinventorycmdb
-
-REPO_ROOT = Path(__file__).parent.parent
+from ansibleinventorycmdb.constants import PROGRAM_NAME, PROGRAM_REPO_URL, PROGRAM_VERSION
 
 
 def test_version_pyproject() -> None:
     """Verify version in pyproject.toml matches package version."""
-    pyproject_path = REPO_ROOT / "pyproject.toml"
-    with pyproject_path.open("rb") as f:
+    with Path("pyproject.toml").open("rb") as f:
         pyproject_toml = tomllib.load(f)
-    assert pyproject_toml.get("project", {}).get("version", None) == ansibleinventorycmdb.__version__
+    assert pyproject_toml.get("project", {}).get("version", None) == PROGRAM_VERSION
 
 
 def test_version_lock() -> None:
     """Verify version in uv.lock matches package version."""
-    lock_path = REPO_ROOT / "uv.lock"
-    with lock_path.open("rb") as f:
+    with Path("uv.lock").open("rb") as f:
         uv_lock = tomllib.load(f)
 
     found_version = False
     for package in uv_lock.get("package", []):
-        if package.get("name") == "ansibleinventorycmdb":
-            assert package.get("version") == ansibleinventorycmdb.__version__
+        if package.get("name") == PROGRAM_NAME:
+            assert package.get("version") == PROGRAM_VERSION
             found_version = True
             break
 
-    assert found_version, "ansibleinventorycmdb not found in uv.lock"
+    assert found_version, f"{PROGRAM_NAME} not found in uv.lock"
+
+
+def test_repo_url() -> None:
+    """Verify repo URL is correct."""
+    with Path("pyproject.toml").open("rb") as f:
+        pyproject_toml = tomllib.load(f)
+    assert pyproject_toml.get("project", {}).get("urls", {}).get("Repository", None) == PROGRAM_REPO_URL

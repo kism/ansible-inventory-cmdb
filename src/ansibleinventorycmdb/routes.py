@@ -11,8 +11,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from .cmdb import AnsibleCMDB
+from .constants import PROGRAM_VERSION
 from .logger import get_logger
-from .version import __version__
 
 logger = get_logger(__name__)
 
@@ -217,4 +217,4 @@ def group_json(inventory: str, group: str, cmdb: CMDBJson) -> dict:
 @router.get("/health")
 def health() -> dict:
     """Health check endpoint."""
-    return {"version": __version__}
+    return {"version": PROGRAM_VERSION}

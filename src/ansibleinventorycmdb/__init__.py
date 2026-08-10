@@ -9,9 +9,9 @@ from fastapi.staticfiles import StaticFiles
 
 from .cmdb import AnsibleCMDB
 from .config import Config, get_instance_path, load_config
+from .constants import PROGRAM_NAME_WITH_VERSION, PROGRAM_VERSION
 from .logger import LoggingConfig, get_logger, setup_logger
 from .routes import STATIC_DIR, HTMLError, html_error_handler, refresh_cmdb, router
-from .version import __version__
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -42,7 +42,7 @@ def create_app(config: Config | None = None, instance_path: str | None = None) -
     _logger.debug("Instance path is: %s", instance_path)
     _logger.debug("Config: %s", config)
 
-    app = FastAPI(lifespan=lifespan, title="Ansible Inventory CMDB", version=__version__)
+    app = FastAPI(lifespan=lifespan, title="Ansible Inventory CMDB", version=PROGRAM_VERSION)
 
     app.state.config = config
     app.state.instance_path = instance_path
@@ -52,6 +52,6 @@ def create_app(config: Config | None = None, instance_path: str | None = None) -
     app.include_router(router)
     app.add_exception_handler(HTMLError, html_error_handler)
 
-    _logger.info("Starting Web Server, Ansible Inventory CMDB Version: %s", __version__)
+    _logger.info("Starting Web Server, %s", PROGRAM_NAME_WITH_VERSION)
 
     return app
