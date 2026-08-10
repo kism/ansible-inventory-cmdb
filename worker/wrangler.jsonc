@@ -1,4 +1,5 @@
 {
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "ansible-inventory-cmdb",
   "main": "src/entry.py",
   // Must not be newer than the workerd binary wrangler ships with, or `pywrangler dev` refuses to start.

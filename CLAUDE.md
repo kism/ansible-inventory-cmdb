@@ -70,6 +70,9 @@ User-facing docs for this mode live in [README_Wrangler.md](README_Wrangler.md),
   (Pyodide has no `pwd`).
 - `compatibility_date` must not be newer than the workerd binary wrangler ships with, or `pywrangler dev` refuses
   to start. Trigger a local run with `curl http://localhost:8787/cdn-cgi/handler/scheduled`.
+- wrangler is pinned in `worker/package.json`, not installed globally — run `npm install` in `worker/` once.
+  `pywrangler` shells out to `npx wrangler`, which prefers the local copy. Bumping it may require bumping
+  `compatibility_date` too.
 
 ### State and dependencies
 

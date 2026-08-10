@@ -1,0 +1,12 @@
+{
+  "name": "ansible-inventory-cmdb-worker",
+  "private": true,
+  "description": "Pins wrangler for the Cloudflare Worker. pywrangler shells out to npx, which prefers this local copy over downloading one.",
+  "scripts": {
+    "dev": "uv run pywrangler dev",
+    "deploy": "uv run pywrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.120.0"
+  }
+}
