@@ -24,6 +24,7 @@ npm install
 
 ```bash
 cd worker
+npx wrangler login --browser false
 npx wrangler r2 bucket create ansible-inventory-cmdb   # then enable public access on it in the dashboard
 $EDITOR src/config.yml                                 # same schema as instance/config.yml
 uv run pywrangler dev                                  # then trigger a build, see below
@@ -37,6 +38,21 @@ Cron Triggers don't fire during local development, so trigger a build by hand:
 ```bash
 curl http://localhost:8787/cdn-cgi/handler/scheduled
 ```
+
+There is no equivalent for a deployed Worker — a cron trigger can't be fired on demand — so the first real build
+happens at the next 14:00 UTC.
+
+### Don't bump `compatibility_date` casually
+
+A date of **2026-08-05 or later** makes Cloudflare reject the deploy:
+
+```
+Uncaught Error: Dynamic require of "fs" is not supported ... in loadPyodide [code: 10021]
+```
+
+Pyodide fails to boot during Cloudflare's deploy-time validation. This reproduces on a zero-dependency
+hello-world Python Worker, so it is a platform bug rather than anything in this project. `2026-08-01` is the
+newest date that deploys; re-test the boundary before raising it.
 
 ## URLs
 
@@ -54,23 +70,23 @@ uv run ansibleinventorycmdb-generate ./out
 
 ## Layout
 
-| Path                                             | Role                                                            |
-| ------------------------------------------------ | --------------------------------------------------------------- |
+| Path                                             | Role                                                             |
+| ------------------------------------------------ | ---------------------------------------------------------------- |
 | [`worker/src/entry.py`](worker/src/entry.py)     | The `scheduled` handler: build the CMDB, PUT every page to R2    |
 | [`worker/src/config.yml`](worker/src/config.yml) | The inventories to render, bundled with the Worker               |
 | [`worker/wrangler.jsonc`](worker/wrangler.jsonc) | Cron schedule, R2 binding, module rules, and the copy build step |
 | [`worker/pyproject.toml`](worker/pyproject.toml) | A separate uv project, resolved against the Pyodide index        |
-| [`worker/package.json`](worker/package.json)     | Pins wrangler, so no global install is needed                     |
+| [`worker/package.json`](worker/package.json)     | Pins wrangler, so no global install is needed                    |
 
 ## Generated directories
 
 Two directories in `worker/` are build artifacts. Both are gitignored and both refresh themselves — there is
 nothing to run by hand:
 
-| Path                            | Made by                                             | Refreshed when                                             |
-| ------------------------------- | --------------------------------------------------- | ---------------------------------------------------------- |
-| `worker/src/ansibleinventorycmdb` | the `build` command in `wrangler.jsonc`             | every `dev` and `deploy` — it's an `rm -rf` + `cp -r`      |
-| `worker/python_modules`         | `pywrangler`, from `pylock.toml`                     | when `pyproject.toml` or `pylock.toml` is newer than its `.synced` token |
+| Path                              | Made by                                 | Refreshed when                                                           |
+| --------------------------------- | --------------------------------------- | ------------------------------------------------------------------------ |
+| `worker/src/ansibleinventorycmdb` | the `build` command in `wrangler.jsonc` | every `dev` and `deploy` — it's an `rm -rf` + `cp -r`                    |
+| `worker/python_modules`           | `pywrangler`, from `pylock.toml`        | when `pyproject.toml` or `pylock.toml` is newer than its `.synced` token |
 
 The package is copied rather than depended on because `pywrangler` resolves against the Pyodide package index with
 `--no-build`, so a path dependency fails to resolve, and wrangler does not follow symlinks.

@@ -72,8 +72,14 @@ User-facing docs for this mode live in [README_Wrangler.md](README_Wrangler.md),
 - Three imports are deferred so the Worker doesn't have to install what it never uses, or can't:
   `create_app`/FastAPI in `__init__.py`, `aiohttp` in `cmdb.aiohttp_fetcher`, and `pwd` in `config._write_config`
   (Pyodide has no `pwd`).
-- `compatibility_date` must not be newer than the workerd binary wrangler ships with, or `pywrangler dev` refuses
-  to start. Trigger a local run with `curl http://localhost:8787/cdn-cgi/handler/scheduled`.
+- **`compatibility_date` has two independent ceilings, and the second one is not obvious.** Newer than the workerd
+  binary wrangler ships with and `pywrangler dev` won't start. **2026-08-05 or later and the deploy is rejected**
+  with `Dynamic require of "fs" is not supported` from `loadPyodide` — Pyodide fails to boot in Cloudflare's
+  deploy-time validation. That reproduces on a zero-dependency hello-world Worker, so it is a platform bug, not
+  anything in this repo; don't go looking in `entry.py` for it. Pinned to `2026-08-01`, the newest date that
+  deploys. Re-bisect before raising it.
+- Trigger a local run with `curl http://localhost:8787/cdn-cgi/handler/scheduled`. There is no equivalent for a
+  deployed Worker — a cron trigger can't be fired on demand, so production waits for 14:00 UTC.
 - wrangler is pinned in `worker/package.json`, not installed globally — run `npm install` in `worker/` once.
   `pywrangler` shells out to `npx wrangler`, which prefers the local copy. Bumping it may require bumping
   `compatibility_date` too.
