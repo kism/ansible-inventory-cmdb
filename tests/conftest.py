@@ -9,6 +9,8 @@ Inventory fetches are served by a real local HTTP server rather than a mocking l
 patch aiohttp internals and break on minor aiohttp releases; a socket does not.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import shutil

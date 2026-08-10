@@ -2,10 +2,8 @@
 
 import asyncio
 from http import HTTPStatus
-from pathlib import Path
 from typing import Annotated
 
-import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -13,28 +11,19 @@ from fastapi.templating import Jinja2Templates
 from .cmdb import AnsibleCMDB
 from .constants import PROGRAM_VERSION
 from .logger import get_logger
+from .site import TEMPLATES_DIR, dump_vars, group_hosts, group_list
 
 logger = get_logger(__name__)
 
 REFRESH_INTERVAL_SECONDS = 21600  # 6 hours
 
-TEMPLATES_DIR = Path(__file__).parent / "templates"
-STATIC_DIR = Path(__file__).parent / "static"
+# The web app serves each page at its bare path; the static site appends /index.html to all of them. See site.py.
+ROOT_HREF = "/"
+PAGE_SUFFIX = ""
 
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 router = APIRouter()
-
-
-def str_presenter(dumper: yaml.representer.SafeRepresenter, data: str) -> yaml.nodes.ScalarNode:
-    """YAML string presenter, use |- block."""
-    if len(data.splitlines()) > 1:  # check for multiline string
-        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
-    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
-
-
-yaml.add_representer(str, str_presenter)
-yaml.representer.SafeRepresenter.add_representer(str, str_presenter)  # Use with safe
 
 
 class HTMLError(Exception):
@@ -50,7 +39,12 @@ class HTMLError(Exception):
 async def html_error_handler(request: Request, exc: Exception) -> HTMLResponse:
     """Render error.html.j2 for any HTMLError raised by a page route."""
     assert isinstance(exc, HTMLError)  # noqa: S101 Only registered for HTMLError, this is for the type checker
-    return templates.TemplateResponse(request, "error.html.j2", {"error": exc.message}, status_code=exc.status)
+    return templates.TemplateResponse(
+        request,
+        "error.html.j2",
+        {"error": exc.message, "root_href": ROOT_HREF, "page_suffix": PAGE_SUFFIX},
+        status_code=exc.status,
+    )
 
 
 def get_cmdb(request: Request) -> AnsibleCMDB:
@@ -101,21 +95,14 @@ async def refresh_cmdb(cmdb: AnsibleCMDB) -> None:
         raise
 
 
-def _dump_vars(var_dict: dict) -> str:
-    """Dump vars as yaml, alphabetically, with an empty dict rendering as just '---'."""
-    alphabetical_var_dict = dict(sorted(var_dict.items(), key=lambda item: str(item[0])))
-    nice_vars = yaml.dump(alphabetical_var_dict, explicit_start=True, default_flow_style=False, width=1000)
-
-    if nice_vars.strip() == "--- {}":
-        nice_vars = "---"
-
-    return nice_vars
-
-
 @router.get("/", response_class=HTMLResponse)
 def home(request: Request, cmdb: CMDB) -> HTMLResponse:
     """Home webpage, lists the inventories."""
-    return templates.TemplateResponse(request, "home.html.j2", {"inventories": cmdb.get_inventories()})
+    return templates.TemplateResponse(
+        request,
+        "home.html.j2",
+        {"inventories": cmdb.get_inventories(), "root_href": ROOT_HREF, "page_suffix": PAGE_SUFFIX},
+    )
 
 
 @router.get("/inventory/{inventory}", response_class=HTMLResponse)
@@ -135,10 +122,6 @@ def inventory(request: Request, inventory: str, cmdb: CMDB) -> HTMLResponse:
             msg = f"Inventory '{inventory}' found, but inventory schema not found"
             raise HTMLError(msg, HTTPStatus.NOT_FOUND) from None
 
-    groups: list[str] = []
-    if inventory_dict.get("hosts"):
-        groups = ["all"] + [g for g in inventory_dict.get("groups", {}) if g != "all"]
-
     return templates.TemplateResponse(
         request,
         "inventory.html.j2",
@@ -146,7 +129,9 @@ def inventory(request: Request, inventory: str, cmdb: CMDB) -> HTMLResponse:
             "inventory_name": inventory,
             "inventory_dict": inventory_dict,
             "schema_mapping": schema_mapping,
-            "groups": groups,
+            "groups": group_list(inventory_dict),
+            "root_href": ROOT_HREF,
+            "page_suffix": PAGE_SUFFIX,
         },
     )
 
@@ -162,12 +147,19 @@ def host(request: Request, inventory: str, host: str, cmdb: CMDB) -> HTMLRespons
             msg = f"Host '{host}' not found"
             raise HTMLError(msg, HTTPStatus.NOT_FOUND)
 
-        host_nice_vars = _dump_vars(host_vars["vars"])
+        host_nice_vars = dump_vars(host_vars["vars"])
 
     return templates.TemplateResponse(
         request,
         "vars.html.j2",
-        {"__inventory": inventory, "__thing": "host_vars", "__host": host, "__vars": host_nice_vars},
+        {
+            "__inventory": inventory,
+            "__thing": "host_vars",
+            "__host": host,
+            "__vars": host_nice_vars,
+            "root_href": ROOT_HREF,
+            "page_suffix": PAGE_SUFFIX,
+        },
     )
 
 
@@ -178,13 +170,20 @@ def group(request: Request, inventory: str, group: str, cmdb: CMDB) -> HTMLRespo
         group_nice_vars = "CMDB not ready, please wait a moment and refresh."
         status = HTTPStatus.TOO_EARLY
     else:
-        group_nice_vars = _dump_vars(cmdb.get_group(inventory, group))
+        group_nice_vars = dump_vars(cmdb.get_group(inventory, group))
         status = HTTPStatus.OK
 
     return templates.TemplateResponse(
         request,
         "vars.html.j2",
-        {"__inventory": inventory, "__thing": "group_vars", "__host": group, "__vars": group_nice_vars},
+        {
+            "__inventory": inventory,
+            "__thing": "group_vars",
+            "__host": group,
+            "__vars": group_nice_vars,
+            "root_href": ROOT_HREF,
+            "page_suffix": PAGE_SUFFIX,
+        },
         status_code=status,
     )
 
@@ -199,19 +198,11 @@ def group_json(inventory: str, group: str, cmdb: CMDBJson) -> dict:
     if inventory_dict == {}:
         raise HTTPException(HTTPStatus.NOT_FOUND, f"Inventory '{inventory}' not found")
 
-    hosts_data: dict = inventory_dict.get("hosts", {})
-    if group == "all":
-        return {hostname: host_data["vars"] for hostname, host_data in hosts_data.items()}
-
-    group_hosts = {
-        hostname: host_data["vars"]
-        for hostname, host_data in hosts_data.items()
-        if group in host_data.get("groups", [])
-    }
-    if not group_hosts and group not in inventory_dict.get("groups", {}):
+    hosts = group_hosts(inventory_dict, group)
+    if hosts is None:
         raise HTTPException(HTTPStatus.NOT_FOUND, f"Group '{group}' not found")
 
-    return group_hosts
+    return hosts
 
 
 @router.get("/health")

@@ -1,7 +1,6 @@
 """Config models and loading."""
 
 import os
-import pwd
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -79,6 +78,8 @@ def _write_config(config: Config, path: str) -> None:
         with open(path, "w", encoding="utf8") as yaml_file:
             yaml.safe_dump(config.model_dump(), yaml_file)
     except PermissionError as exc:
+        import pwd  # noqa: PLC0415 Not importable under Pyodide, and only needed for this error message
+
         user_account = pwd.getpwuid(os.getuid())[0]
         err = f"Fix permissions: chown {user_account} {path}"
         raise PermissionError(err) from exc

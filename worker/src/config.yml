@@ -1,0 +1,12 @@
+cmdb:
+  kism_main:
+    inventory_url: https://raw.githubusercontent.com/kism/ansible-playbooks/refs/heads/main/inventory/main.yml
+    schema_mapping:
+      ansible_host: Hostname
+      ansible_host_description: Description
+      proxmox_target_node: PVE Node
+      target_host_ip_address: IP Address
+      target_host_mac_address: MAC Address
+logging:
+  level: INFO
+  path: ''

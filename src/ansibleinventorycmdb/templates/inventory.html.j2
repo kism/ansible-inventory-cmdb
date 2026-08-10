@@ -11,15 +11,15 @@
 <body>
     <main>
         <h2>Ansible Inventory CMDB</h2>
-        <p><a href="/">Inventories</a> / <b>{{ inventory_name }}</b></p>
+        <p><a href="{{ root_href }}">Inventories</a> / <b>{{ inventory_name }}</b></p>
         <table id="Hosts">
             <tr>
                 {% for key, value in schema_mapping.items() %}<th onclick="sortTable({{ loop.index0 }})"">{{ value }}</th>{% endfor %}<th>Host Vars</th><th>Group Vars</th>
             </tr>{% for host, host_vars in inventory_dict['hosts'].items() %}
             <tr>
                 {% for key, value in schema_mapping.items() %}<td>{{ host_vars['vars'][key] | default('-') }}</td>{% endfor %}
-                <td><a href="/inventory/{{ inventory_name }}/host/{{ host }}">{{ host }}</a></td>
-                <td>{% for group in host_vars['groups'] %}<a href="/inventory/{{ inventory_name }}/group/{{ group }}">{{ group }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td>
+                <td><a href="/inventory/{{ inventory_name }}/host/{{ host }}{{ page_suffix }}">{{ host }}</a></td>
+                <td>{% for group in host_vars['groups'] %}<a href="/inventory/{{ inventory_name }}/group/{{ group }}{{ page_suffix }}">{{ group }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</td>
             </tr>{% endfor %}
         </table>
         {% if groups %}

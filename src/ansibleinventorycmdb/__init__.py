@@ -1,57 +1,26 @@
-"""FastAPI webapp ansibleinventorycmdb."""
+"""Present Ansible inventories as a CMDB, either as a web app or as a static site.
 
-import asyncio
-import contextlib
-from typing import TYPE_CHECKING
+`create_app` is imported lazily. Importing it eagerly would drag FastAPI, starlette and uvicorn into every consumer
+of this package, including the Cloudflare Worker in worker/, which only wants `cmdb` and `site` and has no use for
+a web framework. `ansibleinventorycmdb:create_app` still resolves for uvicorn, via PEP 562.
+"""
 
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
+from __future__ import annotations
 
-from .cmdb import AnsibleCMDB
-from .config import Config, get_instance_path, load_config
-from .constants import PROGRAM_NAME_WITH_VERSION, PROGRAM_VERSION
-from .logger import LoggingConfig, get_logger, setup_logger
-from .routes import STATIC_DIR, HTMLError, html_error_handler, refresh_cmdb, router
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from .app import create_app  # Re-exported for type checkers; at runtime __getattr__ below resolves it
 
-_logger = get_logger(__name__)
-
-
-@contextlib.asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Run the background refresh task for the life of the server."""
-    task = asyncio.create_task(refresh_cmdb(app.state.cmdb))
-    try:
-        yield
-    finally:
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+__all__ = ["create_app"]
 
 
-def create_app(config: Config | None = None, instance_path: str | None = None) -> FastAPI:
-    """Create and configure an instance of the FastAPI application."""
-    instance_path = instance_path or get_instance_path()
+def __getattr__(name: str) -> Any:  # noqa: ANN401 Module-level __getattr__ returns whatever the attribute is
+    """Resolve `create_app` on first access, so importing this package doesn't import FastAPI."""
+    if name == "create_app":
+        from .app import create_app  # noqa: PLC0415 That's the point, the import is deferred
 
-    setup_logger(LoggingConfig())  # Setup logger with defaults so config loading gets logged
-    config = config or load_config(instance_path)
-    setup_logger(config.logging)  # Setup logger with the real config
+        return create_app
 
-    _logger.debug("Instance path is: %s", instance_path)
-    _logger.debug("Config: %s", config)
-
-    app = FastAPI(lifespan=lifespan, title="Ansible Inventory CMDB", version=PROGRAM_VERSION)
-
-    app.state.config = config
-    app.state.instance_path = instance_path
-    app.state.cmdb = AnsibleCMDB(config.cmdb, instance_path)
-
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-    app.include_router(router)
-    app.add_exception_handler(HTMLError, html_error_handler)
-
-    _logger.info("Starting Web Server, %s", PROGRAM_NAME_WITH_VERSION)
-
-    return app
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)

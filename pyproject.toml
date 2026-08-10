@@ -5,7 +5,7 @@ description = "Generates a CMDB webpage from an ansible git repository"
 authors = [{ name = "Kieran Gee", email = "kieran.lost.the.game@gmail.com" }]
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.14"
+requires-python = ">=3.13"  # 3.13 is what Pyodide runs, see worker/
 dependencies = [
     "aiohttp>=3.14.3",
     "fastapi>=0.115.0",
@@ -19,6 +19,7 @@ Repository = "https://github.com/kism/ansible-inventory-cmdb"
 
 [project.scripts]
 ansibleinventorycmdb = "ansibleinventorycmdb.__main__:main"
+ansibleinventorycmdb-generate = "ansibleinventorycmdb.site:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -47,6 +48,13 @@ test = [
 package = true
 default-groups = ["dev", "test", "type", "lint"]
 
+
+# worker/ imports the `workers` SDK, which only exists inside the Pyodide runtime. It's its own uv project.
+[tool.ty.src]
+exclude = ["worker"]
+
+[tool.pyright]
+exclude = ["worker", "**/.venv", "**/node_modules"]
 
 [tool.ruff]
 cache-dir = "~/.cache/ruff"
@@ -91,7 +99,6 @@ ignore = [
     "ANN001", # Tests don't need type hints.
     "S311",   # I'll assume no real crypto will be done in PyTest.
     "BLE001", # BaseException is fine in tests
-
 ]
 
 

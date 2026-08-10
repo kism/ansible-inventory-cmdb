@@ -1,0 +1,7 @@
+{
+  "enabledPlugins": {
+    "cloudflare@claude-plugins-official": true,
+    "astral@astral-sh": true,
+    "ponytail@ponytail": true
+  }
+}

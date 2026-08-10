@@ -1,0 +1,41 @@
+{
+  "name": "ansible-inventory-cmdb",
+  "main": "src/entry.py",
+  // Must not be newer than the workerd binary wrangler ships with, or `pywrangler dev` refuses to start.
+  "compatibility_date": "2026-08-08",
+  "compatibility_flags": ["python_workers"],
+
+  // pywrangler resolves dependencies against the Pyodide index with --no-build, so the package can't be a path
+  // dependency. It gets copied in next to the entrypoint instead, on every dev and deploy. src/ansibleinventorycmdb
+  // is generated, and gitignored.
+  "build": {
+    "command": "rm -rf src/ansibleinventorycmdb && cp -r ../src/ansibleinventorycmdb src/ && find src/ansibleinventorycmdb -name __pycache__ -type d -exec rm -rf {} +"
+  },
+
+  // Without these only .py files are bundled, and the templates, CSS and fonts would silently go missing.
+  "rules": [
+    {
+      "type": "Data",
+      "globs": ["**/*.j2", "**/*.yml", "**/*.css", "**/*.js", "**/*.woff2"],
+      "fallthrough": true
+    }
+  ],
+
+  // Daily at 14:00 UTC. Cron Triggers always run on UTC.
+  "triggers": {
+    "crons": ["0 14 * * *"]
+  },
+
+  // Create with: wrangler r2 bucket create ansible-inventory-cmdb
+  // then enable public access on it (custom domain, or the r2.dev development URL).
+  "r2_buckets": [
+    {
+      "binding": "CMDB_BUCKET",
+      "bucket_name": "ansible-inventory-cmdb"
+    }
+  ],
+
+  "observability": {
+    "enabled": true
+  }
+}
