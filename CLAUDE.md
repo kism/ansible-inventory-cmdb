@@ -26,7 +26,7 @@ src layout, installed as a package (hatchling). Imports are `ansibleinventorycmd
 
 | Module                                                                         | Role                                                                              |
 | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| [`src/ansibleinventorycmdb/__init__.py`](src/ansibleinventorycmdb/__init__.py) | `create_app()` factory and the lifespan that starts the refresh thread            |
+| [`src/ansibleinventorycmdb/__init__.py`](src/ansibleinventorycmdb/__init__.py) | `create_app()` factory and the lifespan that owns the refresh task                |
 | [`src/ansibleinventorycmdb/__main__.py`](src/ansibleinventorycmdb/__main__.py) | `main()`, the `ansibleinventorycmdb` console script, runs uvicorn                 |
 | [`src/ansibleinventorycmdb/routes.py`](src/ansibleinventorycmdb/routes.py)     | `APIRouter`, templates, the `HTMLError` page handler, and the CMDB refresh loop   |
 | [`src/ansibleinventorycmdb/cmdb.py`](src/ansibleinventorycmdb/cmdb.py)         | `AnsibleCMDB`: fetches inventory URLs, parses hosts/groups/vars, pickle URL cache |
@@ -43,9 +43,24 @@ Templates use `.html.j2` extension (Jinja2). Static assets (CSS, JS, fonts) are 
   difference is whether the error renders as HTML or JSON.
 - Page routes signal errors by raising `HTMLError(message, status)`, which `html_error_handler` renders with
   `error.html.j2`. JSON routes raise a plain `HTTPException`.
-- Routes are sync `def`, so blocking `requests` calls run in FastAPI's threadpool. Don't make them `async def`
-  without also making `cmdb.py` async.
 - `logger` in `__init__.py` is named `_logger`, because `ansibleinventorycmdb.logger` is a submodule.
+
+### Fetching
+
+`AnsibleCMDB.build()`/`refresh()` and everything below them are `async`, using `aiohttp`. Routes stay sync `def`
+because they only read the already-built in-memory dicts — they never fetch.
+
+- One `ClientSession` is created per `build()` and threaded down as an explicit parameter. Nothing holds a session
+  between builds.
+- Per-host and per-group var fetches are `asyncio.gather`ed. The two URLs *within* `_set_host_vars`/`_set_group_vars`
+  stay sequential, because the `inventory/` path deliberately overrides the top-level one.
+- `CONCURRENT_REQUEST_LIMIT` caps the connector. Raising it hammers whatever hosts the inventory.
+- The URL cache and the dump are written once at the end of `build()`, via `asyncio.to_thread`. Don't move the cache
+  write back into `_get_yaml` — concurrent fetches would race the same file.
+- `_get_yaml` swallows every fetch exception into an `{"error": True, ...}` dict so one dead URL can't fail the whole
+  build. Failures are therefore invisible except in the logs — see the test fixtures below.
+- The background refresh is an `asyncio.Task` created in the lifespan and cancelled on shutdown. It catches and logs
+  its own exceptions; nothing awaits it, so an uncaught one would be silent.
 
 ## Configuration
 
@@ -65,12 +80,15 @@ uv run pytest -k test_name      # single test
 uv run pytest --random-order    # order independence
 ```
 
-- **All HTTP requests are mocked** via an auto-use fixture in [`tests/conftest.py`](tests/conftest.py) — add new URLs
-  to the mock list when adding inventory URL tests. The `error_on_unfetchable_url` auto-use fixture fails the test if
-  you forget, since `AnsibleCMDB` deliberately swallows fetch errors.
-- The `client` fixture does **not** enter the TestClient context, so the lifespan and its refresh thread don't run.
-  A thread still fetching when `requests_mock` unpatches at teardown makes real network requests and flakes other
-  tests. `test_lifespan_builds_cmdb` covers the lifespan and waits for the build before leaving the context.
+- **Inventory fetches hit a real local HTTP server**, not a mocking library — `inventory_server` in
+  [`tests/conftest.py`](tests/conftest.py) serves the fixture inventory on a random port. aiohttp mocking libraries
+  (aioresponses) patch aiohttp internals and are broken against aiohttp 3.14; a socket is not.
+- Test configs use `https://pytest.internal` as a placeholder, which `get_test_config` rewrites to the live server
+  address. Add new paths to `EMPTY_VAR_PATHS`; the `mock_get_inventory_url` auto-use fixture fails the test on any
+  path the server didn't recognise, so a missing entry can't silently become empty data.
+- `build_cmdb` runs the async `refresh()` from a sync test via `asyncio.run`. There is no pytest-asyncio.
+- The `client` fixture does **not** enter the TestClient context, so the lifespan and its refresh task don't run.
+  `test_lifespan_builds_cmdb` covers the lifespan and waits for the build before leaving the context.
 - Always pass `tmp_path` as `instance_path`; the `app` fixture asserts this. Tests that build their own
   `AnsibleCMDB` need their own subdirectory, or its `url_cache.pkl` collides with the app's.
 - Test configs live in [`tests/configs/`](tests/configs/); test inventories in [`tests/inventories/`](tests/inventories/).

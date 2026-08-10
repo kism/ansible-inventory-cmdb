@@ -1,7 +1,6 @@
 """Routes, templates and the CMDB refresh loop."""
 
-import threading
-import time
+import asyncio
 from http import HTTPStatus
 from pathlib import Path
 from typing import Annotated
@@ -75,26 +74,31 @@ CMDB = Annotated[AnsibleCMDB, Depends(get_cmdb)]
 CMDBJson = Annotated[AnsibleCMDB, Depends(get_cmdb_json)]
 
 
-def start_refresh_thread(cmdb: AnsibleCMDB) -> None:
-    """Start the background thread that builds then periodically refreshes the CMDB."""
-    thread = threading.Thread(target=refresh_cmdb, args=(cmdb,), daemon=True)
-    thread.start()
+async def refresh_cmdb(cmdb: AnsibleCMDB) -> None:
+    """Build the CMDB, then refresh it every REFRESH_INTERVAL_SECONDS.
 
+    Runs as a background task for the life of the app, so it logs its own failures. Nothing awaits it, an
+    unhandled exception here would otherwise be silent and the CMDB would never update again.
+    """
+    try:
+        if not cmdb.ready:
+            logger.info("CMDB not ready, building...")
+            await cmdb.build()
 
-def refresh_cmdb(cmdb: AnsibleCMDB) -> None:
-    """Build the CMDB, then refresh it every REFRESH_INTERVAL_SECONDS."""
-    if not cmdb.ready:
-        logger.info("CMDB not ready, building...")
-        cmdb.build()
+        if cmdb.refresh_required:
+            logger.info("CMDB refresh required, refreshing...")
+            await cmdb.refresh()
 
-    if cmdb.refresh_required:
-        logger.info("CMDB refresh required, refreshing...")
-        cmdb.refresh()
-
-    while True:
-        logger.info("Sleeping for %s seconds before next refresh", REFRESH_INTERVAL_SECONDS)
-        time.sleep(REFRESH_INTERVAL_SECONDS)
-        cmdb.refresh()
+        while True:
+            logger.info("Sleeping for %s seconds before next refresh", REFRESH_INTERVAL_SECONDS)
+            await asyncio.sleep(REFRESH_INTERVAL_SECONDS)
+            await cmdb.refresh()
+    except asyncio.CancelledError:
+        logger.info("Refresh task cancelled")
+        raise
+    except Exception:
+        logger.exception("Refresh task died, the CMDB will not update until restart")
+        raise
 
 
 def _dump_vars(var_dict: dict) -> str:

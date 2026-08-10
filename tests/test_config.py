@@ -18,10 +18,10 @@ def test_config_defaults():
     assert config.cmdb, "Default config has no inventories"
 
 
-def test_config_valid(get_test_config):
+def test_config_valid(get_test_config, inventory_server):
     """TEST: The test config parses into the model."""
     config = Config(**get_test_config("valid.yml"))
-    assert config.cmdb["test_main"].inventory_url == "https://pytest.internal/inventory/main.yml"
+    assert config.cmdb["test_main"].inventory_url == f"{inventory_server}/inventory/main.yml"
     assert config.cmdb["test_main"].schema_mapping["ansible_host"] == "Hostname"
 
 

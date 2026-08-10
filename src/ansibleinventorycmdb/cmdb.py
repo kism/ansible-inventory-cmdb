@@ -1,11 +1,12 @@
 """Ansible Inventory CMDB Object."""
 
+import asyncio
 import os
 import pickle
 import re
 from typing import TYPE_CHECKING
 
-import requests
+import aiohttp
 import yaml
 
 from .logger import get_logger
@@ -14,6 +15,9 @@ if TYPE_CHECKING:
     from .config import Inventory
 
 logger = get_logger(__name__)
+
+REQUEST_TIMEOUT_SECONDS = 5
+CONCURRENT_REQUEST_LIMIT = 10  # Be polite to whatever is hosting the inventory
 
 
 class AnsibleCMDB:
@@ -44,23 +48,37 @@ class AnsibleCMDB:
                 self.url_cache = pickle.load(cache_file)
                 self.refresh_required = True
 
-    def refresh(self) -> None:
-        """Refresh the CMDB data."""
-        logger.info("Refreshing CMDB")
-        self.url_cache = {}
-        self.build()
-        logger.info("CMDB refresh complete")
-        self.refresh_required = False
+    def _write_output(self) -> None:
+        """Write the URL cache and the CMDB dump to disk.
 
-    def build(self) -> None:
-        """Build the CMDB."""
-        logger.info("Building CMDB")
-        for inventory_tmp_dict in self.inventories.values():
-            inventory_tmp_dict["hosts"] = self._build_cmdb_hosts(inventory_dict=inventory_tmp_dict)
-            inventory_tmp_dict["groups"] = self._build_cmdb_groups(inventory_dict=inventory_tmp_dict)
+        Called once per build. Fetches run concurrently, so a per-fetch cache write would race itself.
+        """
+        with open(self._cache_file, "wb") as cache_file:
+            pickle.dump(self.url_cache, cache_file, pickle.HIGHEST_PROTOCOL)
 
         with open(self._dump_file, "w") as dump_file:
             yaml.dump(self.inventories, dump_file, explicit_start=True)
+
+    async def refresh(self) -> None:
+        """Refresh the CMDB data."""
+        logger.info("Refreshing CMDB")
+        self.url_cache = {}
+        await self.build()
+        logger.info("CMDB refresh complete")
+        self.refresh_required = False
+
+    async def build(self) -> None:
+        """Build the CMDB."""
+        logger.info("Building CMDB")
+        connector = aiohttp.TCPConnector(limit=CONCURRENT_REQUEST_LIMIT)
+        timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT_SECONDS)
+
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+            for inventory_tmp_dict in self.inventories.values():
+                inventory_tmp_dict["hosts"] = await self._build_cmdb_hosts(inventory_tmp_dict, session)
+                inventory_tmp_dict["groups"] = await self._build_cmdb_groups(inventory_tmp_dict, session)
+
+        await asyncio.to_thread(self._write_output)  # Blocking IO, keep it off the event loop
 
         logger.info("CMDB built")
         self.ready = True
@@ -90,25 +108,27 @@ class AnsibleCMDB:
         except KeyError:
             return {}
 
-    def _build_cmdb_groups(self, inventory_dict: dict) -> dict:
+    async def _build_cmdb_groups(self, inventory_dict: dict, session: aiohttp.ClientSession) -> dict:
         """Build the CMDB groups from the inventory."""
-        inventory_yaml = self._get_yaml(inventory_dict["url"])
+        inventory_yaml = await self._get_yaml(inventory_dict["url"], session)
 
         if not inventory_yaml:
             return {}
 
-        groups: dict = {}
-        for group in inventory_yaml:
-            groups[group] = {}
+        groups: dict = {group: {} for group in inventory_yaml}
 
-        for group, group_vars in groups.items():
-            self._set_group_vars(group, group_vars, inventory_dict["base_url"])
+        await asyncio.gather(
+            *[
+                self._set_group_vars(group, group_vars, inventory_dict["base_url"], session)
+                for group, group_vars in groups.items()
+            ]
+        )
 
         return groups
 
-    def _build_cmdb_hosts(self, inventory_dict: dict) -> dict:
+    async def _build_cmdb_hosts(self, inventory_dict: dict, session: aiohttp.ClientSession) -> dict:
         """Build the CMDB hosts from the inventory."""
-        inventory_yaml = self._get_yaml(inventory_dict["url"])
+        inventory_yaml = await self._get_yaml(inventory_dict["url"], session)
 
         if not inventory_yaml:
             return {}
@@ -121,8 +141,9 @@ class AnsibleCMDB:
         for host, host_data in hosts.items():
             host_data["groups"] = self._get_groups_of_host(host, inventory_yaml)
 
-        for host in hosts:
-            self._set_host_vars(host, hosts[host]["vars"], inventory_dict["base_url"])
+        await asyncio.gather(
+            *[self._set_host_vars(host, hosts[host]["vars"], inventory_dict["base_url"], session) for host in hosts]
+        )
 
         # Get the inline vars for each host
         for host in hosts:
@@ -141,56 +162,53 @@ class AnsibleCMDB:
         """Get the groups of a host."""
         return [group for group in inventory_yaml if host in inventory_yaml[group]["hosts"]]
 
-    def _set_group_vars(self, group: str, group_vars: dict, base_url: str) -> None:
-        """Get the vars of a group."""
+    async def _set_group_vars(
+        self, group: str, group_vars: dict, base_url: str, session: aiohttp.ClientSession
+    ) -> None:
+        """Get the vars of a group. Fetched in order, the inventory/ path overrides the top level one."""
         group_var_urls = [
             f"{base_url}/group_vars/{group}.yml",
             f"{base_url}/inventory/group_vars/{group}.yml",
         ]
 
         for group_var_url in group_var_urls:
-            group_yaml = self._get_yaml(group_var_url)
+            group_yaml = await self._get_yaml(group_var_url, session)
 
             if group_yaml:
                 group_vars.update(dict(group_yaml.items()))
 
-    def _set_host_vars(self, host: str, host_vars: dict, base_url: str) -> None:
-        """Get the vars of a host."""
+    async def _set_host_vars(self, host: str, host_vars: dict, base_url: str, session: aiohttp.ClientSession) -> None:
+        """Get the vars of a host. Fetched in order, the inventory/ path overrides the top level one."""
         host_var_urls = [
             f"{base_url}/host_vars/{host}.yml",
             f"{base_url}/inventory/host_vars/{host}.yml",
         ]
 
         for host_var_url in host_var_urls:
-            host_yaml = self._get_yaml(host_var_url)
+            host_yaml = await self._get_yaml(host_var_url, session)
 
             if host_yaml:
                 host_vars.update(dict(host_yaml.items()))
 
-    def _get_yaml(self, url: str) -> dict:
+    async def _get_yaml(self, url: str, session: aiohttp.ClientSession) -> dict:
         """Get a yaml file from a URL."""
         if url not in self.url_cache:
             logger.debug(f"Getting URL: {url}")
             try:
-                response = requests.get(url, timeout=5)
-                if not response.ok:
-                    return {}
+                async with session.get(url) as response:
+                    if not response.ok:
+                        return {}
 
-                temp_text = response.text
+                    temp_yaml = yaml.safe_load(await response.text())
 
             except TimeoutError:
                 logger.warning("Timeout getting URL: %s", url)
-                temp_text = "---\nerror: true\nmessage: Timeout error\nexception: TimeoutError"
+                temp_yaml = {"error": True, "message": "Timeout error", "exception": "TimeoutError"}
             except Exception as e:  # noqa: BLE001 One bad inventory URL shouldn't take down the whole CMDB
                 logger.warning("Unhandled exception getting URL %s: %s", url, e)
-                temp_text = f"---\nerror: true\nmessage: Unhandled exception\nexception: {e}"
-
-            temp_yaml = yaml.safe_load(temp_text)
+                temp_yaml = {"error": True, "message": "Unhandled exception", "exception": str(e)}
 
             self.url_cache[url] = temp_yaml
-
-            with open(self._cache_file, "wb") as cache_file:
-                pickle.dump(self.url_cache, cache_file, pickle.HIGHEST_PROTOCOL)
 
         else:
             logger.trace(f"Using cached URL: {url}")

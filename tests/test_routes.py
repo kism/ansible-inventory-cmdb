@@ -15,14 +15,13 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture
-def test_cmdb_object(tmp_path, mock_get_inventory_url, get_test_config):
+def test_cmdb_object(tmp_path, mock_get_inventory_url, get_test_config, build_cmdb):
     """A built CMDB. Its own instance path, so its url cache doesn't collide with the app fixture's."""
     instance_path = tmp_path / "cmdb_fixture"
     instance_path.mkdir()
 
     cmdb = AnsibleCMDB(instance_path=str(instance_path), inventories=Config(**get_test_config("valid.yml")).cmdb)
-    cmdb.refresh()
-    return cmdb
+    return build_cmdb(cmdb)
 
 
 def test_get(client: TestClient, app: FastAPI, test_cmdb_object):

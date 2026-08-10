@@ -1,5 +1,6 @@
 """FastAPI webapp ansibleinventorycmdb."""
 
+import asyncio
 import contextlib
 from typing import TYPE_CHECKING
 
@@ -9,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from .cmdb import AnsibleCMDB
 from .config import Config, get_instance_path, load_config
 from .logger import LoggingConfig, get_logger, setup_logger
-from .routes import STATIC_DIR, HTMLError, html_error_handler, router, start_refresh_thread
+from .routes import STATIC_DIR, HTMLError, html_error_handler, refresh_cmdb, router
 from .version import __version__
 
 if TYPE_CHECKING:
@@ -20,9 +21,14 @@ _logger = get_logger(__name__)
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Start the background refresh thread once the server is up."""
-    start_refresh_thread(app.state.cmdb)
-    yield
+    """Run the background refresh task for the life of the server."""
+    task = asyncio.create_task(refresh_cmdb(app.state.cmdb))
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 def create_app(config: Config | None = None, instance_path: str | None = None) -> FastAPI:
