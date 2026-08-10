@@ -1,9 +1,13 @@
-"""Cloudflare Worker: render the CMDB to a public R2 bucket on a cron trigger.
+"""Cloudflare Worker: render the CMDB to a public R2 bucket.
 
-No fetch handler. The Worker only writes objects, R2 serves them. To trigger a build by hand during
-`pywrangler dev`, curl http://localhost:8787/__scheduled
+Normally driven by the cron trigger in wrangler.jsonc. The fetch handler exists only so a build can be run
+on demand — a deployed cron trigger cannot be fired by hand, so without it the first build after a deploy waits
+for the next scheduled run.
+
+To trigger a build during `pywrangler dev`, curl http://localhost:8787/cdn-cgi/handler/scheduled
 """
 
+import hmac
 from pathlib import Path
 
 import yaml
@@ -11,7 +15,7 @@ from ansibleinventorycmdb.cmdb import AnsibleCMDB
 from ansibleinventorycmdb.config import Config
 from ansibleinventorycmdb.logger import LoggingConfig, get_logger, setup_logger
 from ansibleinventorycmdb.site import render_site
-from workers import WorkerEntrypoint, fetch
+from workers import Response, WorkerEntrypoint, fetch
 
 # Bundled with the Worker, since there is no instance path to read a config from.
 CONFIG = Config(**yaml.safe_load((Path(__file__).parent / "config.yml").read_text()))
@@ -31,6 +35,28 @@ class Default(WorkerEntrypoint):
 
     async def scheduled(self, controller, env, ctx) -> None:  # noqa: ANN001, ARG002 Signature is the runtime's
         """Build the CMDB and write every page to R2. All four parameters are required by the runtime."""
+        await self._build_and_upload()
+
+    async def fetch(self, request) -> Response:  # noqa: ANN001 The runtime passes a JS Request
+        """Run a build on demand. Requires the BUILD_TOKEN secret as a bearer token.
+
+        The workers.dev URL is public, and a build costs ~75 requests against whatever hosts the inventory, so an
+        unauthenticated endpoint here would be a free way to hammer someone else's server. Fails closed: with no
+        BUILD_TOKEN configured there is no way in.
+        """
+        expected = getattr(self.env, "BUILD_TOKEN", None)
+        presented = request.headers.get("authorization") or ""
+
+        # 404 rather than 403, so an unauthenticated caller can't tell the endpoint apart from a missing one.
+        if not expected or not hmac.compare_digest(presented, f"Bearer {expected}"):
+            logger.warning("Rejected an unauthenticated build request")
+            return Response("Not found", status=404)
+
+        count = await self._build_and_upload()
+        return Response(f"Wrote {count} objects\n")
+
+    async def _build_and_upload(self) -> int:
+        """Build the CMDB and PUT every rendered page into R2. Returns the number of objects written."""
         cmdb = AnsibleCMDB(CONFIG.cmdb)  # No instance path: Workers have no writable filesystem
         await cmdb.build(fetch_text)
 
@@ -40,3 +66,4 @@ class Default(WorkerEntrypoint):
             count += 1
 
         logger.info("Wrote %s objects to R2", count)
+        return count

@@ -39,8 +39,58 @@ Cron Triggers don't fire during local development, so trigger a build by hand:
 curl http://localhost:8787/cdn-cgi/handler/scheduled
 ```
 
-There is no equivalent for a deployed Worker — a cron trigger can't be fired on demand — so the first real build
-happens at the next 14:00 UTC.
+A deployed cron trigger **cannot** be fired on demand — `wrangler dev --remote` doesn't dispatch scheduled
+events either — so the Worker also has a `fetch` handler for ad-hoc builds. See below.
+
+## Run a build on demand
+
+Set a `BUILD_TOKEN` secret once, then `POST`/`GET` the Worker's URL with it as a bearer token:
+
+```bash
+cd worker
+npx wrangler secret put BUILD_TOKEN          # paste a long random string, keep a copy
+uv run pywrangler deploy
+curl -H "Authorization: Bearer $BUILD_TOKEN" https://<your-worker>.workers.dev
+# -> Wrote 55 objects
+```
+
+That's also how you get the site populated immediately after the first deploy, rather than waiting for 14:00 UTC.
+
+**Deploying never runs the cron.** A fresh deploy leaves the bucket empty until the next scheduled fire, so the
+public URL 404s until then. Either use the endpoint above, or seed the bucket from a local run by temporarily
+adding `"remote": true` to the R2 binding in `wrangler.jsonc`:
+
+```bash
+uv run pywrangler dev                                   # binding now points at the real bucket
+curl http://localhost:8787/cdn-cgi/handler/scheduled
+```
+
+Take `"remote": true` back out afterwards — left in, every local dev run overwrites production.
+
+## Checking the last run
+
+`wrangler` has no historical log query; `npx wrangler tail ansible-inventory-cmdb --format pretty` only streams
+what happens while you're attached.
+
+To find out when the site was last rebuilt, ask the site — every run rewrites all 55 objects:
+
+```bash
+curl -sI https://<your-domain>/index.html | grep -i last-modified
+```
+
+Don't use `wrangler r2 bucket info` for this. Its `object_count` is a lagging metric and still read `0` several
+minutes after a run had demonstrably written all 55 objects.
+
+The endpoint **fails closed**: with no `BUILD_TOKEN` set, every request gets a 404 and no build runs. The guard
+matters because the `workers.dev` URL is public and each build costs ~75 requests against whatever hosts your
+inventory — an open endpoint would be a free way for anyone to hammer that server. A wrong or missing token
+returns 404 rather than 403, so it doesn't advertise itself.
+
+For local `pywrangler dev`, put the token in `worker/.dev.vars` (gitignored):
+
+```bash
+echo 'BUILD_TOKEN="whatever-you-like"' > .dev.vars
+```
 
 ### Don't bump `compatibility_date` casually
 
@@ -72,7 +122,7 @@ uv run ansibleinventorycmdb-generate ./out
 
 | Path                                             | Role                                                             |
 | ------------------------------------------------ | ---------------------------------------------------------------- |
-| [`worker/src/entry.py`](worker/src/entry.py)     | The `scheduled` handler: build the CMDB, PUT every page to R2    |
+| [`worker/src/entry.py`](worker/src/entry.py)     | `scheduled` (cron) and `fetch` (ad-hoc, token-guarded) handlers   |
 | [`worker/src/config.yml`](worker/src/config.yml) | The inventories to render, bundled with the Worker               |
 | [`worker/wrangler.jsonc`](worker/wrangler.jsonc) | Cron schedule, R2 binding, module rules, and the copy build step |
 | [`worker/pyproject.toml`](worker/pyproject.toml) | A separate uv project, resolved against the Pyodide index        |

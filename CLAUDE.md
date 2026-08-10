@@ -78,8 +78,13 @@ User-facing docs for this mode live in [README_Wrangler.md](README_Wrangler.md),
   deploy-time validation. That reproduces on a zero-dependency hello-world Worker, so it is a platform bug, not
   anything in this repo; don't go looking in `entry.py` for it. Pinned to `2026-08-01`, the newest date that
   deploys. Re-bisect before raising it.
-- Trigger a local run with `curl http://localhost:8787/cdn-cgi/handler/scheduled`. There is no equivalent for a
-  deployed Worker — a cron trigger can't be fired on demand, so production waits for 14:00 UTC.
+- Trigger a local run with `curl http://localhost:8787/cdn-cgi/handler/scheduled`. A *deployed* cron trigger can't
+  be fired on demand — `wrangler dev --remote` returns error 1042 rather than dispatching one — which is why
+  `entry.py` has a `fetch` handler as well. Both handlers call `_build_and_upload`; keep it that way so the
+  ad-hoc path can't drift from the scheduled one.
+- The `fetch` handler is guarded by the `BUILD_TOKEN` secret and **fails closed** — no token configured means every
+  request 404s. Don't relax this: the `workers.dev` URL is public and each build is ~75 requests against whoever
+  hosts the inventory. It returns 404 rather than 403 so it doesn't advertise itself.
 - wrangler is pinned in `worker/package.json`, not installed globally — run `npm install` in `worker/` once.
   `pywrangler` shells out to `npx wrangler`, which prefers the local copy. Bumping it may require bumping
   `compatibility_date` too.
