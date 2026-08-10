@@ -28,22 +28,23 @@ CONCURRENT_REQUEST_LIMIT = 10  # Be polite to whatever is hosting the inventory
 
 
 @contextlib.asynccontextmanager
-async def aiohttp_fetcher() -> AsyncIterator[FetchText]:
-    """The default fetcher: one aiohttp session, wrapped as a plain `url -> body or None` callable.
+async def httpx_fetcher() -> AsyncIterator[FetchText]:
+    """The default fetcher: one httpx client, wrapped as a plain `url -> body or None` callable.
 
-    aiohttp is imported here rather than at module level so that importing this module doesn't require it. The
-    Cloudflare Worker never uses this path — aiohttp's TCP connector needs sockets and the `ssl` module, neither of
-    which exists under Pyodide — so it would be a megabyte of dead weight in the Worker bundle.
+    httpx is imported here rather than at module level so that importing this module doesn't require it. The
+    Cloudflare Worker doesn't use this path — it passes the Workers runtime's own fetch instead, see build().
+
+    follow_redirects is not httpx's default and the raw-file hosts an inventory lives on do redirect. A non-2xx
+    response must come back as None rather than raise, so don't add raise_for_status(): a host or group with no vars
+    file 404s on every build, and that's the normal case, not an error.
     """
-    import aiohttp  # noqa: PLC0415 Deferred on purpose, see the docstring
+    import httpx  # noqa: PLC0415 Deferred on purpose, see the docstring
 
-    timeout = aiohttp.ClientTimeout(total=REQUEST_TIMEOUT_SECONDS)
-
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT_SECONDS, follow_redirects=True) as client:
 
         async def fetch_text(url: str) -> str | None:
-            async with session.get(url) as response:
-                return await response.text() if response.ok else None
+            response = await client.get(url)
+            return response.text if response.is_success else None
 
         yield fetch_text
 
@@ -108,15 +109,15 @@ class AnsibleCMDB:
         """Build the CMDB.
 
         Args:
-            fetch_text: How to fetch a URL, as `url -> body or None`. Defaults to aiohttp. The Cloudflare Worker
-                passes the Workers runtime's `fetch` instead, because aiohttp cannot make requests under Pyodide:
-                its connector wants a socket and the `ssl` module, and a Worker has neither.
+            fetch_text: How to fetch a URL, as `url -> body or None`. Defaults to httpx. The Cloudflare Worker
+                passes the Workers runtime's `fetch` instead — that's the path known to work there, and it keeps
+                the Worker from depending on how Pyodide patches an HTTP client.
         """
         logger.info("Building CMDB")
         self._request_limit = asyncio.Semaphore(CONCURRENT_REQUEST_LIMIT)
 
         if fetch_text is None:
-            async with aiohttp_fetcher() as default_fetch_text:
+            async with httpx_fetcher() as default_fetch_text:
                 await self._build_inventories(default_fetch_text)
         else:
             await self._build_inventories(fetch_text)

@@ -75,7 +75,7 @@ def setup_logger(logging_conf: LoggingConfig, in_logger: logging.Logger | None =
     # Configure modules that are external and have their own loggers
     logging.getLogger("uvicorn").setLevel(logging.INFO)  # Web server, info has useful info.
     logging.getLogger("uvicorn.access").setLevel(logging.INFO)  # Logs incoming requests.
-    logging.getLogger("urllib3").setLevel(logging.WARNING)  # Bit noisy when set to info, used by requests module.
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # One INFO line per request, ~75 of them per build.
 
     logger.info("Logger configuration set!")
 

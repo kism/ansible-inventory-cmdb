@@ -1,13 +1,19 @@
 # Agent Instructions
 
-FastAPI web app that presents Ansible inventories as a CMDB (Configuration Management Database) webpage. See
+Presents Ansible inventories as a CMDB (Configuration Management Database) webpage. See
 [README.md](README.md) for full project overview.
 
 ## Setup
 
 ```bash
-uv sync
+uv sync                # Cloudflare Worker and static-site modes
+uv sync --extra server # ...plus the FastAPI web app
+npm install            # wrangler, pinned in package.json
 ```
+
+One `pyproject.toml` covers all three modes. **`[project.dependencies]` is the Worker's install list** — pywrangler
+reads it and nothing else (no extras, no dependency-groups) and resolves it against the Pyodide index, so anything
+the Worker can't run belongs in the `server` extra. See *Dependency layout* below.
 
 ## Essential Commands
 
@@ -20,6 +26,7 @@ uv sync
 | Type check              | `uv run ty check` and `uv run pyright`                                 |
 | Render the static site  | `uv run ansibleinventorycmdb-generate <output dir>`                    |
 | Dev server              | `uv run uvicorn ansibleinventorycmdb:create_app --factory --port 5100` |
+| Worker dev / deploy     | `uv run pywrangler dev` / `uv run pywrangler deploy` (from the repo root) |
 
 ## Architecture
 
@@ -35,6 +42,7 @@ src layout, installed as a package (hatchling). Imports are `ansibleinventorycmd
 | [`src/ansibleinventorycmdb/cmdb.py`](src/ansibleinventorycmdb/cmdb.py)         | `AnsibleCMDB`: fetches inventory URLs, parses hosts/groups/vars, pickle URL cache |
 | [`src/ansibleinventorycmdb/config.py`](src/ansibleinventorycmdb/config.py)     | pydantic `Config`/`Inventory` models and `load_config()`                          |
 | [`src/ansibleinventorycmdb/logger.py`](src/ansibleinventorycmdb/logger.py)     | `LoggingConfig`, custom logger with TRACE level (5); use `get_logger(__name__)`   |
+| [`src/entry.py`](src/entry.py)                                                | The Cloudflare Worker's entrypoint. Not part of the package, see below           |
 
 Templates use `.html.j2` extension (Jinja2). Static assets (CSS, JS, fonts) are in
 [`src/ansibleinventorycmdb/static/`](src/ansibleinventorycmdb/static/), mounted at `/static`.
@@ -46,9 +54,9 @@ definition time, so any module with a `TYPE_CHECKING`-only import used in a sign
 ### Static site / Cloudflare Worker mode
 
 [`site.py`](src/ansibleinventorycmdb/site.py) renders every page up front instead of per request.
-[`worker/`](worker/) is a separate uv project: a cron-triggered Python Worker that builds the CMDB and PUTs the
-result into a public R2 bucket. `uv run ansibleinventorycmdb-generate <dir>` does the same thing to a directory.
-User-facing docs for this mode live in [README_Wrangler.md](README_Wrangler.md), not README.md.
+[`src/entry.py`](src/entry.py) is a cron-triggered Python Worker that builds the CMDB and PUTs the result into a
+public R2 bucket. `uv run ansibleinventorycmdb-generate <dir>` does the same thing to a directory. User-facing docs
+for this mode live in [README_Wrangler.md](README_Wrangler.md), not README.md.
 
 - `site.py` must not import FastAPI. It is the lower layer; `routes.py` imports `dump_vars`, `group_list` and
   `group_hosts` from it so both modes share one implementation.
@@ -57,20 +65,21 @@ User-facing docs for this mode live in [README_Wrangler.md](README_Wrangler.md),
   keyspace tolerates but a filesystem or an `rclone sync` does not.
 - Templates take `root_href` and `page_suffix` so the same template emits both link styles. The web app passes
   `"/"` and `""`; the static site passes `"/index.html"` and `"/index.html"`.
-- `worker/` is excluded from `ty` and `pyright` in `pyproject.toml`; its `workers` import only resolves inside
-  Pyodide.
-- **The Worker gets the package by copy, not by dependency.** `pywrangler` resolves dependencies against the
-  Pyodide index with `--no-build`, so a path dependency fails, and wrangler does not follow symlinks. The `build`
-  command in `wrangler.jsonc` copies `src/ansibleinventorycmdb` next to the entrypoint on every dev and deploy;
-  the copy is gitignored. Don't edit it — it is `rm -rf`'d on the next run. `worker/python_modules` is likewise
-  generated, re-synced by pywrangler whenever `pyproject.toml`/`pylock.toml` outdate its `.synced` token.
-- `worker/pyproject.toml` repeats the package's runtime dependencies by hand and is the one part of `worker/` that
-  doesn't self-maintain. `tests/test_worker_deps.py` fails if it drifts from the root `pyproject.toml`; if you add
-  a dependency that the Worker genuinely never imports, add it to `NOT_NEEDED_BY_THE_WORKER` there.
+- **`wrangler.jsonc` has to sit next to `pyproject.toml`.** pywrangler takes the directory of the nearest
+  `pyproject.toml` above the cwd as the project root and looks for the wrangler config *there*; `pylock.toml`,
+  `python_modules/` and `.venv-workers/` are written there too. That's why all of it is at the repo root and there
+  is no `worker/` directory.
+- **The Worker bundles the package because it's a sibling of the entrypoint, not because of a build step.**
+  wrangler's `base_dir` defaults to the entrypoint's directory, so `main: src/entry.py` makes `src/ansibleinventorycmdb`
+  bundle at the same path it is imported from. There used to be an `rm -rf` + `cp -r` build command faking this;
+  don't bring it back. `.pyc` files aren't a problem — no module rule matches them.
+- `src/entry.py` is excluded from `ty` and `pyright` in `pyproject.toml`; its `workers` import only resolves inside
+  Pyodide. It is deliberately *not* inside the package: in the bundle it's a top-level module, so it needs the
+  absolute `ansibleinventorycmdb.*` imports it has.
 - Non-`.py` files need a `rules` entry in `wrangler.jsonc` or they are silently left out of the bundle — that's
-  what carries the templates, CSS and fonts.
+  what carries the templates, CSS, fonts and `src/config.yml`.
 - Three imports are deferred so the Worker doesn't have to install what it never uses, or can't:
-  `create_app`/FastAPI in `__init__.py`, `aiohttp` in `cmdb.aiohttp_fetcher`, and `pwd` in `config._write_config`
+  `create_app`/FastAPI in `__init__.py`, `httpx` in `cmdb.httpx_fetcher`, and `pwd` in `config._write_config`
   (Pyodide has no `pwd`).
 - **`compatibility_date` has two independent ceilings, and the second one is not obvious.** Newer than the workerd
   binary wrangler ships with and `pywrangler dev` won't start. **2026-08-05 or later and the deploy is rejected**
@@ -85,9 +94,26 @@ User-facing docs for this mode live in [README_Wrangler.md](README_Wrangler.md),
 - The `fetch` handler is guarded by the `BUILD_TOKEN` secret and **fails closed** — no token configured means every
   request 404s. Don't relax this: the `workers.dev` URL is public and each build is ~75 requests against whoever
   hosts the inventory. It returns 404 rather than 403 so it doesn't advertise itself.
-- wrangler is pinned in `worker/package.json`, not installed globally — run `npm install` in `worker/` once.
+- wrangler is pinned in `package.json`, not installed globally — run `npm install` at the repo root once.
   `pywrangler` shells out to `npx wrangler`, which prefers the local copy. Bumping it may require bumping
   `compatibility_date` too.
+
+### Dependency layout
+
+One `pyproject.toml`, three modes. `pywrangler`'s `parse_requirements()` reads **only `[project.dependencies]`** —
+extras and dependency-groups are invisible to it — and compiles that list against the Pyodide index with
+`--no-build`. So that list is exactly "what the Worker installs", and it is load-bearing:
+
+- `[project.dependencies]`: `httpx`, `jinja2`, `pydantic`, `pyyaml`. All four have Pyodide wheels. Adding something
+  here without a Pyodide wheel breaks `pywrangler dev`/`deploy` at the resolve step, not at runtime.
+- `[project.optional-dependencies].server`: `fastapi`, `uvicorn`. `uv sync --extra server`. The `test`
+  dependency-group pulls it in as `ansibleinventorycmdb[server]`, so `uv sync` for development still gets it.
+- `[dependency-groups].worker`: `workers-py`, `workers-runtime-sdk`. In `default-groups`, so `uv run pywrangler`
+  works after a plain `uv sync`. CI passes `--no-group worker`.
+- **`aiohttp` is not an option here.** `aiohttp>=3.14.3` has no usable wasm wheel at all, and unpinned it resolves
+  to the socket-based build that dies under Pyodide with `RuntimeError("SSL is not supported.")`. The Pyodide index
+  serves its *own* `httpx` wheel (different sha256 from PyPI's, and no `httpcore`/`anyio`/`certifi` in its
+  metadata) patched to use the JS `fetch` API, which is why httpx is the one that works in both places.
 
 ### State and dependencies
 
@@ -105,15 +131,19 @@ read the already-built in-memory dicts — they never fetch.
 
 - **HTTP is injected, not hardcoded.** `build(fetch_text)` takes a `Callable[[str], Awaitable[str | None]]` —
   a URL in, the body out, `None` if the response wasn't OK — and threads it down instead of a session. It defaults
-  to `aiohttp_fetcher()`, one `aiohttp.ClientSession` per build. **The Worker must pass its own**, because aiohttp
-  cannot make a request under Pyodide at all: its connector wants a socket and the `ssl` module, and a Worker has
-  neither. The failure is a `RuntimeError("SSL is not supported.")` swallowed into an error dict, so it surfaces as
-  an empty CMDB rather than a crash. `aiohttp` is imported inside `aiohttp_fetcher` so the Worker never loads it.
+  to `httpx_fetcher()`, one `httpx.AsyncClient` per build; `entry.py` passes the Workers runtime's `fetch`
+  instead, which is the path that's actually been run in a Worker. `httpx` is imported inside `httpx_fetcher`, so
+  the Worker never loads it.
+- `httpx_fetcher` needs `follow_redirects=True` (httpx doesn't redirect by default, aiohttp did) and must **not**
+  call `raise_for_status()`. A host or group with no vars file 404s on every single build — that's the normal case,
+  and it has to come back as `None`, not an exception. httpx's own INFO logging is turned down in `logger.py`,
+  it logs a line per request.
 - Per-host and per-group var fetches are `asyncio.gather`ed. The two URLs *within* `_set_host_vars`/`_set_group_vars`
   stay sequential, because the `inventory/` path deliberately overrides the top-level one.
 - `CONCURRENT_REQUEST_LIMIT` caps an `asyncio.Semaphore` held across each fetch, recreated per `build()` because
-  an asyncio primitive binds to the loop that first awaits it. A semaphore rather than a `TCPConnector` limit
-  because the connector isn't in the picture any more. Raising it hammers whatever hosts the inventory.
+  an asyncio primitive binds to the loop that first awaits it. A semaphore rather than a client-level connection
+  limit, because the client isn't in the picture on the Worker's path. Raising it hammers whatever hosts the
+  inventory.
 - The URL cache and the dump are written once at the end of `build()`, via `asyncio.to_thread`. Don't move the cache
   write back into `_get_yaml` — concurrent fetches would race the same file.
 - `AnsibleCMDB(inventories)` with no `instance_path` skips the cache and the dump entirely. That's the Worker's
@@ -144,8 +174,8 @@ uv run pytest --random-order    # order independence
 ```
 
 - **Inventory fetches hit a real local HTTP server**, not a mocking library — `inventory_server` in
-  [`tests/conftest.py`](tests/conftest.py) serves the fixture inventory on a random port. aiohttp mocking libraries
-  (aioresponses) patch aiohttp internals and are broken against aiohttp 3.14; a socket is not.
+  [`tests/conftest.py`](tests/conftest.py) serves the fixture inventory on a random port. HTTP mocking libraries
+  patch client internals and break on the client's minor releases; a socket does not.
 - Test configs use `https://pytest.internal` as a placeholder, which `get_test_config` rewrites to the live server
   address. Add new paths to `EMPTY_VAR_PATHS`; the `mock_get_inventory_url` auto-use fixture fails the test on any
   path the server didn't recognise, so a missing entry can't silently become empty data.

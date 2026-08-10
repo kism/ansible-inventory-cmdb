@@ -10,20 +10,21 @@ times two paths), over the free plan's cap of 50.
 
 ## Prerequisites
 
-`wrangler` is pinned in [`worker/package.json`](worker/package.json) rather than installed globally, so it does
-not need to be on your PATH:
+`wrangler` is pinned in [`package.json`](package.json) rather than installed globally, so it does not need to be on
+your PATH:
 
 ```bash
-cd worker
+uv sync
 npm install
 ```
 
-`pywrangler` shells out to `npx wrangler`, which picks up this local copy instead of downloading one.
+`pywrangler` shells out to `npx wrangler`, which picks up this local copy instead of downloading one. Every command
+below runs from the repo root — there is one `pyproject.toml` and pywrangler insists on finding `wrangler.jsonc`
+beside it.
 
 ## Deploy
 
 ```bash
-cd worker
 npx wrangler login --browser false
 npx wrangler r2 bucket create ansible-inventory-cmdb   # then enable public access on it in the dashboard
 $EDITOR src/config.yml                                 # same schema as instance/config.yml
@@ -47,7 +48,6 @@ events either — so the Worker also has a `fetch` handler for ad-hoc builds. Se
 Set a `BUILD_TOKEN` secret once, then `POST`/`GET` the Worker's URL with it as a bearer token:
 
 ```bash
-cd worker
 npx wrangler secret put BUILD_TOKEN          # paste a long random string, keep a copy
 uv run pywrangler deploy
 curl -H "Authorization: Bearer $BUILD_TOKEN" https://<your-worker>.workers.dev
@@ -86,7 +86,7 @@ matters because the `workers.dev` URL is public and each build costs ~75 request
 inventory — an open endpoint would be a free way for anyone to hammer that server. A wrong or missing token
 returns 404 rather than 403, so it doesn't advertise itself.
 
-For local `pywrangler dev`, put the token in `worker/.dev.vars` (gitignored):
+For local `pywrangler dev`, put the token in `.dev.vars` (gitignored):
 
 ```bash
 echo 'BUILD_TOKEN="whatever-you-like"' > .dev.vars
@@ -120,27 +120,40 @@ uv run ansibleinventorycmdb-generate ./out
 
 ## Layout
 
-| Path                                             | Role                                                             |
-| ------------------------------------------------ | ---------------------------------------------------------------- |
-| [`worker/src/entry.py`](worker/src/entry.py)     | `scheduled` (cron) and `fetch` (ad-hoc, token-guarded) handlers   |
-| [`worker/src/config.yml`](worker/src/config.yml) | The inventories to render, bundled with the Worker               |
-| [`worker/wrangler.jsonc`](worker/wrangler.jsonc) | Cron schedule, R2 binding, module rules, and the copy build step |
-| [`worker/pyproject.toml`](worker/pyproject.toml) | A separate uv project, resolved against the Pyodide index        |
-| [`worker/package.json`](worker/package.json)     | Pins wrangler, so no global install is needed                    |
+| Path                                   | Role                                                           |
+| -------------------------------------- | -------------------------------------------------------------- |
+| [`src/entry.py`](src/entry.py)         | `scheduled` (cron) and `fetch` (ad-hoc, token-guarded) handlers |
+| [`src/config.yml`](src/config.yml)     | The inventories to render, bundled with the Worker             |
+| [`wrangler.jsonc`](wrangler.jsonc)     | Cron schedule, R2 binding, module rules                        |
+| [`pyproject.toml`](pyproject.toml)     | One project for all three run modes, see below                 |
+| [`package.json`](package.json)         | Pins wrangler, so no global install is needed                  |
 
-## Generated directories
+`src/entry.py` sits beside `src/ansibleinventorycmdb/` on purpose. wrangler bundles everything under the
+entrypoint's directory, so the package ships at the same path the entrypoint imports it from, with no copying,
+symlinking or path dependency involved.
 
-Two directories in `worker/` are build artifacts. Both are gitignored and both refresh themselves — there is
-nothing to run by hand:
+## The dependency list is the Worker's install list
 
-| Path                              | Made by                                 | Refreshed when                                                           |
-| --------------------------------- | --------------------------------------- | ------------------------------------------------------------------------ |
-| `worker/src/ansibleinventorycmdb` | the `build` command in `wrangler.jsonc` | every `dev` and `deploy` — it's an `rm -rf` + `cp -r`                    |
-| `worker/python_modules`           | `pywrangler`, from `pylock.toml`        | when `pyproject.toml` or `pylock.toml` is newer than its `.synced` token |
+`pywrangler` reads **`[project.dependencies]` and nothing else** — extras and dependency-groups are invisible to it
+— and resolves that list against the Pyodide package index with `--no-build`. So:
 
-The package is copied rather than depended on because `pywrangler` resolves against the Pyodide package index with
-`--no-build`, so a path dependency fails to resolve, and wrangler does not follow symlinks.
+| Where                                    | What                            | How to install               |
+| ---------------------------------------- | ------------------------------- | ---------------------------- |
+| `[project.dependencies]`                 | httpx, jinja2, pydantic, pyyaml | `uv sync` — Worker + CLI     |
+| `[project.optional-dependencies].server` | fastapi, uvicorn                | `uv sync --extra server`     |
+| `[dependency-groups].worker`             | workers-py, workers-runtime-sdk | `uv sync` (a default group)  |
 
-**The one thing that does not maintain itself** is the dependency list in `worker/pyproject.toml`, which repeats
-the package's runtime dependencies by hand. `tests/test_worker_deps.py` fails if the two drift, because otherwise
-a missing dependency only shows up as a Worker that dies on import at 14:00 UTC.
+Anything you add to the first row must have a Pyodide wheel, or `pywrangler dev`/`deploy` fails at the resolve
+step. Notably **aiohttp does not**: recent versions have no wasm wheel at all, and older ones resolve to the
+socket-based build, which dies under Pyodide with `RuntimeError("SSL is not supported.")`. Pyodide ships its own
+patched `httpx` that goes through the JS `fetch` API, which is why that's the client here.
+
+## Generated files
+
+All gitignored, all self-maintaining — there is nothing to run by hand:
+
+| Path              | Made by                          | Refreshed when                                                           |
+| ----------------- | -------------------------------- | ------------------------------------------------------------------------ |
+| `python_modules/` | `pywrangler`, from `pylock.toml` | when `pyproject.toml` or `pylock.toml` is newer than its `.synced` token |
+| `pylock.toml`     | `pywrangler`, from `pyproject.toml` | on sync; it then constrains later resolves so versions don't drift    |
+| `.venv-workers/`  | `pywrangler`                     | alongside `python_modules`, for editor/type support                      |

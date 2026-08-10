@@ -5,15 +5,20 @@ description = "Generates a CMDB webpage from an ansible git repository"
 authors = [{ name = "Kieran Gee", email = "kieran.lost.the.game@gmail.com" }]
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.13"  # 3.13 is what Pyodide runs, see worker/
+requires-python = ">=3.13"  # 3.13 is what Pyodide runs, see wrangler.jsonc
+
+# pywrangler reads *only* this list and installs it into the Worker, so everything here must have a Pyodide wheel
+# and everything the Worker can't use belongs in an extra below. See README_Wrangler.md.
 dependencies = [
-    "aiohttp>=3.14.3",
-    "fastapi>=0.115.0",
-    "jinja2>=3.1.6",       # Not pulled in by fastapi, needed for Jinja2Templates
-    "pydantic>=2.10.6",    # Used directly by config.py and logger.py, not just via fastapi
+    "httpx>=0.28.1",    # Pyodide's build is patched to use fetch(); aiohttp has no usable wasm wheel at all
+    "jinja2>=3.1.6",    # Not pulled in by fastapi, needed for Jinja2Templates
+    "pydantic>=2.10.6", # Used directly by config.py and logger.py, not just via fastapi
     "pyyaml>=6.0.2",
-    "uvicorn[standard]>=0.34.0",
 ]
+
+# The web app, which neither the Worker nor `ansibleinventorycmdb-generate` needs: uv sync --extra server
+[project.optional-dependencies]
+server = ["fastapi>=0.115.0", "uvicorn[standard]>=0.34.0"]
 
 [project.urls]
 Repository = "https://github.com/kism/ansible-inventory-cmdb"
@@ -25,6 +30,10 @@ ansibleinventorycmdb-generate = "ansibleinventorycmdb.site:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# src/ has non-package siblings now (entry.py and config.yml, the Worker's), so don't leave this to inference.
+[tool.hatch.build.targets.wheel]
+packages = ["src/ansibleinventorycmdb"]
 
 [dependency-groups]
 dev = ["pyright"]
@@ -42,20 +51,30 @@ test = [
     "pytest-random-order",
     "types-pyyaml",
     "detect-test-pollution",
-    "httpx2",             # Required by fastapi.testclient.TestClient
+    "httpx2",                      # Required by fastapi.testclient.TestClient
+    "ansibleinventorycmdb[server]", # The tests exercise the web app, so they need the extra
 ]
+
+# The Cloudflare Worker toolchain. pywrangler shells out to `npx wrangler`, which is pinned in package.json.
+worker = ["workers-py", "workers-runtime-sdk"]
 
 [tool.uv]
 package = true
-default-groups = ["dev", "test", "type", "lint"]
+default-groups = ["dev", "test", "type", "lint", "worker"]
 
 
-# worker/ imports the `workers` SDK, which only exists inside the Pyodide runtime. It's its own uv project.
+# src/entry.py imports the `workers` SDK, which only exists inside the Pyodide runtime.
 [tool.ty.src]
-exclude = ["worker"]
+exclude = ["src/entry.py"]
 
 [tool.pyright]
-exclude = ["worker", "**/.venv", "**/node_modules"]
+exclude = [
+    "src/entry.py",
+    "**/.venv",
+    ".venv-workers",  # pywrangler's Pyodide-pinned venv
+    "python_modules", # pywrangler's vendored Worker dependencies
+    "**/node_modules",
+]
 
 [tool.ruff]
 cache-dir = "~/.cache/ruff"
@@ -85,6 +104,10 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"src/entry.py" = [
+    "INP001", # The Worker entrypoint is a top-level module in the bundle, not part of the package
+]
+
 "tests/*.py" = [
     # Modules
     "ARG", # Unused function args -> fixtures nevertheless are functionally relevant

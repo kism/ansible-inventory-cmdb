@@ -11,11 +11,12 @@ import hmac
 from pathlib import Path
 
 import yaml
+from workers import Response, WorkerEntrypoint, fetch
+
 from ansibleinventorycmdb.cmdb import AnsibleCMDB
 from ansibleinventorycmdb.config import Config
-from ansibleinventorycmdb.logger import LoggingConfig, get_logger, setup_logger
+from ansibleinventorycmdb.logger import get_logger, setup_logger
 from ansibleinventorycmdb.site import render_site
-from workers import Response, WorkerEntrypoint, fetch
 
 # Bundled with the Worker, since there is no instance path to read a config from.
 CONFIG = Config(**yaml.safe_load((Path(__file__).parent / "config.yml").read_text()))
@@ -25,7 +26,7 @@ logger = get_logger(__name__)
 
 
 async def fetch_text(url: str) -> str | None:
-    """Fetch a URL with the Workers runtime's fetch. aiohttp can't do it here: no sockets, no ssl module."""
+    """Fetch a URL with the Workers runtime's fetch, rather than cmdb.py's default httpx client."""
     response = await fetch(url)
     return await response.text() if response.ok else None
 

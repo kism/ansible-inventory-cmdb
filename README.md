@@ -5,8 +5,9 @@
 [![Test](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/test.yml/badge.svg)](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/test.yml)
 [![codecov](https://codecov.io/gh/kism/ansible-inventory-cmdb/graph/badge.svg?token=yA1IpJESD1)](https://codecov.io/gh/kism/ansible-inventory-cmdb)
 
-Webapp that presents an internet hosted Ansible inventory as a nice webpage. FastAPI, no database, the inventory is
-fetched over HTTP into memory and refreshed every 6 hours.
+Presents an internet hosted Ansible inventory as a nice webpage. No database, the inventory is fetched over HTTP
+into memory. Three ways to run it: a FastAPI web app that refreshes every 6 hours, a static site rendered to a
+directory, or a cron-triggered Cloudflare Worker that renders into an R2 bucket.
 
 ## Prerequisites
 
@@ -14,17 +15,20 @@ Install uv <https://docs.astral.sh/uv/getting-started/installation/>
 
 ## Run
 
+The web server is an extra, `--extra server`. Without it you get the two serverless modes: the static site renderer
+and the Cloudflare Worker (see below).
+
 ### Run Dev
 
 ```bash
-uv sync
+uv sync --extra server
 uv run uvicorn ansibleinventorycmdb:create_app --factory --reload --port 5100
 ```
 
 ### Run Prod
 
 ```bash
-uv sync --no-dev
+uv sync --extra server --no-dev
 .venv/bin/uvicorn ansibleinventorycmdb:create_app \
     --factory \
     --host 127.0.0.1 \
@@ -40,10 +44,17 @@ refresh thread.
 There is also a console script, `ansibleinventorycmdb`, which serves on `AIC_HOST` (default `127.0.0.1`) and
 `AIC_PORT` (default `5100`).
 
-### Run as a Cloudflare Worker
+### Run without a server
 
-There is a second run mode with no server at all: a cron-triggered Python Worker renders every page into a public
-R2 bucket once a day. See [README_Wrangler.md](README_Wrangler.md).
+Render the whole site to a directory:
+
+```bash
+uv sync
+uv run ansibleinventorycmdb-generate ./out
+```
+
+Or let a cron-triggered Python Worker render every page into a public Cloudflare R2 bucket once a day. See
+[README_Wrangler.md](README_Wrangler.md).
 
 ## Configuration
 

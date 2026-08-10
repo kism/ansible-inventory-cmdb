@@ -1,8 +1,9 @@
 """Present Ansible inventories as a CMDB, either as a web app or as a static site.
 
 `create_app` is imported lazily. Importing it eagerly would drag FastAPI, starlette and uvicorn into every consumer
-of this package, including the Cloudflare Worker in worker/, which only wants `cmdb` and `site` and has no use for
-a web framework. `ansibleinventorycmdb:create_app` still resolves for uvicorn, via PEP 562.
+of this package, including the Cloudflare Worker in `src/entry.py`, which only wants `cmdb` and `site` and has no
+use for a web framework — they aren't even installed unless you `uv sync --extra server`.
+`ansibleinventorycmdb:create_app` still resolves for uvicorn, via PEP 562.
 """
 
 from __future__ import annotations

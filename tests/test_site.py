@@ -102,7 +102,7 @@ def test_cmdb_without_instance_path_writes_nothing(tmp_path, get_test_config, bu
 
 
 def test_build_uses_the_supplied_fetcher(tmp_path, get_test_config):
-    """The Worker passes its own fetch, because aiohttp cannot make requests under Pyodide."""
+    """The Worker passes its own fetch, the Workers runtime's, rather than the default httpx one."""
     config = Config(**get_test_config("valid.yml"))
     fetched = []
 

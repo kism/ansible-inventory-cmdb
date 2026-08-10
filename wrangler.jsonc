@@ -1,6 +1,8 @@
 {
 	"$schema": "./node_modules/wrangler/config-schema.json",
 	"name": "ansible-inventory-cmdb",
+	// base_dir defaults to the entrypoint's directory, so src/ansibleinventorycmdb is already bundled as a sibling
+	// of entry.py, exactly as it is imported. Nothing needs copying in.
 	"main": "src/entry.py",
 	// Do not bump this blindly. Two separate ceilings:
 	//   - newer than the workerd binary wrangler ships with => `pywrangler dev` refuses to start
@@ -12,12 +14,6 @@
 	"compatibility_flags": [
 		"python_workers"
 	],
-	// pywrangler resolves dependencies against the Pyodide index with --no-build, so the package can't be a path
-	// dependency. It gets copied in next to the entrypoint instead, on every dev and deploy. src/ansibleinventorycmdb
-	// is generated, and gitignored.
-	"build": {
-		"command": "rm -rf src/ansibleinventorycmdb && cp -r ../src/ansibleinventorycmdb src/ && find src/ansibleinventorycmdb -name __pycache__ -type d -exec rm -rf {} +"
-	},
 	// Without these only .py files are bundled, and the templates, CSS and fonts would silently go missing.
 	"rules": [
 		{

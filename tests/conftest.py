@@ -5,8 +5,8 @@ Fixtures defined in a conftest.py can be used by any test in that package withou
 Tests must always use the tmp_path fixture as an instance_path, otherwise they pollute each other (and your real
 instance folder) with config, the cmdb dump and the url cache. The `app` fixture asserts this.
 
-Inventory fetches are served by a real local HTTP server rather than a mocking library. aiohttp mocking libraries
-patch aiohttp internals and break on minor aiohttp releases; a socket does not.
+Inventory fetches are served by a real local HTTP server rather than a mocking library. HTTP mocking libraries patch
+client internals and break on the client's minor releases; a socket does not.
 """
 
 from __future__ import annotations
