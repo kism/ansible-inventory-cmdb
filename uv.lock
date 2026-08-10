@@ -130,6 +130,7 @@ dependencies = [
     { name = "aiohttp" },
     { name = "fastapi" },
     { name = "jinja2" },
+    { name = "pydantic" },
     { name = "pyyaml" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -159,6 +160,7 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.14.3" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "jinja2", specifier = ">=3.1.6" },
+    { name = "pydantic", specifier = ">=2.10.6" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.0" },
 ]
