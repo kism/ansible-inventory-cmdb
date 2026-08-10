@@ -11,27 +11,27 @@ uv sync
 
 ## Essential Commands
 
-| Task                      | Command                                                                  |
-| ------------------------- | ------------------------------------------------------------------------ |
-| Run tests                 | `uv run pytest`                                                          |
-| Run tests with coverage   | `uv run coverage run && uv run coverage report`                          |
-| Lint                      | `uv run ruff check src tests`                                            |
-| Format                    | `uv run ruff format src tests`                                           |
-| Type check                | `uv run ty check` and `uv run pyright`                                   |
-| Dev server                | `uv run uvicorn ansibleinventorycmdb:create_app --factory --port 5100`   |
+| Task                    | Command                                                                |
+| ----------------------- | ---------------------------------------------------------------------- |
+| Run tests               | `uv run pytest`                                                        |
+| Run tests with coverage | `uv run coverage run && uv run coverage report`                        |
+| Lint                    | `uv run ruff check src tests`                                          |
+| Format                  | `uv run ruff format src tests`                                         |
+| Type check              | `uv run ty check` and `uv run pyright`                                 |
+| Dev server              | `uv run uvicorn ansibleinventorycmdb:create_app --factory --port 5100` |
 
 ## Architecture
 
 src layout, installed as a package (hatchling). Imports are `ansibleinventorycmdb.*`, not path-relative.
 
-| Module                                                                             | Role                                                                                   |
-| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [`src/ansibleinventorycmdb/__init__.py`](src/ansibleinventorycmdb/__init__.py)     | `create_app()` factory and the lifespan that starts the refresh thread                 |
-| [`src/ansibleinventorycmdb/__main__.py`](src/ansibleinventorycmdb/__main__.py)     | `main()`, the `ansibleinventorycmdb` console script, runs uvicorn                       |
-| [`src/ansibleinventorycmdb/routes.py`](src/ansibleinventorycmdb/routes.py)         | `APIRouter`, templates, the `HTMLError` page handler, and the CMDB refresh loop         |
-| [`src/ansibleinventorycmdb/cmdb.py`](src/ansibleinventorycmdb/cmdb.py)             | `AnsibleCMDB`: fetches inventory URLs, parses hosts/groups/vars, pickle URL cache       |
-| [`src/ansibleinventorycmdb/config.py`](src/ansibleinventorycmdb/config.py)         | pydantic `Config`/`Inventory` models and `load_config()`                                |
-| [`src/ansibleinventorycmdb/logger.py`](src/ansibleinventorycmdb/logger.py)         | `LoggingConfig`, custom logger with TRACE level (5); use `get_logger(__name__)`         |
+| Module                                                                         | Role                                                                              |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| [`src/ansibleinventorycmdb/__init__.py`](src/ansibleinventorycmdb/__init__.py) | `create_app()` factory and the lifespan that starts the refresh thread            |
+| [`src/ansibleinventorycmdb/__main__.py`](src/ansibleinventorycmdb/__main__.py) | `main()`, the `ansibleinventorycmdb` console script, runs uvicorn                 |
+| [`src/ansibleinventorycmdb/routes.py`](src/ansibleinventorycmdb/routes.py)     | `APIRouter`, templates, the `HTMLError` page handler, and the CMDB refresh loop   |
+| [`src/ansibleinventorycmdb/cmdb.py`](src/ansibleinventorycmdb/cmdb.py)         | `AnsibleCMDB`: fetches inventory URLs, parses hosts/groups/vars, pickle URL cache |
+| [`src/ansibleinventorycmdb/config.py`](src/ansibleinventorycmdb/config.py)     | pydantic `Config`/`Inventory` models and `load_config()`                          |
+| [`src/ansibleinventorycmdb/logger.py`](src/ansibleinventorycmdb/logger.py)     | `LoggingConfig`, custom logger with TRACE level (5); use `get_logger(__name__)`   |
 
 Templates use `.html.j2` extension (Jinja2). Static assets (CSS, JS, fonts) are in
 [`src/ansibleinventorycmdb/static/`](src/ansibleinventorycmdb/static/), mounted at `/static`.
