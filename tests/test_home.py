@@ -1,16 +1,18 @@
 """Tests the app home page."""
 
 from http import HTTPStatus
+from typing import TYPE_CHECKING
 
-from flask.testing import FlaskClient
+if TYPE_CHECKING:
+    from fastapi.testclient import TestClient
 
 
-def test_home(client: FlaskClient):
-    """Test the hello API endpoint. This one uses the fixture in conftest.py."""
+def test_home(client: TestClient):
+    """Test the home page. This one uses the fixture in conftest.py."""
     response = client.get("/")
     # TEST: HTTP OK
     assert response.status_code == HTTPStatus.OK
     # TEST: Content type
-    assert response.content_type == "text/html; charset=utf-8"
+    assert response.headers["content-type"] == "text/html; charset=utf-8"
     # TEST: It is a webpage that we get back
-    assert b"<!doctype html>" in response.data
+    assert "<!doctype html>" in response.text

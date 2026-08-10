@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 5
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.14"]
     steps:
       - uses: actions/checkout@v4
 
@@ -29,7 +29,10 @@ jobs:
         run: uv sync --no-group type --no-group lint --no-group dev
 
       - name: Test with pytest
-        run: uv run pytest --cov-report=xml # xml report needed for codecov, other config from pyproject.toml
+        run: uv run coverage run # pytest invocation is in pyproject.toml [tool.coverage.run]
+
+      - name: Coverage report
+        run: uv run coverage xml # xml report needed for codecov
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4.0.1

@@ -4,19 +4,27 @@ version = "1.1.0"
 description = "Generates a CMDB webpage from an ansible git repository"
 authors = [{ name = "Kieran Gee", email = "kieran.lost.the.game@gmail.com" }]
 readme = "README.md"
-requires-python = ">=3.13"
+license = "MIT"
+requires-python = ">=3.14"
 dependencies = [
-    "flask>=3.1.0",
-    "flask-caching>=2.4.0",
+    "fastapi>=0.115.0",
+    "jinja2>=3.1.0",       # Not pulled in by fastapi, needed for Jinja2Templates
     "pyyaml>=6.0.2",
     "requests>=2.32.3",
-    "waitress>=3.0.2",
+    "uvicorn[standard]>=0.34.0",
 ]
+
+[project.scripts]
+ansibleinventorycmdb = "ansibleinventorycmdb.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = ["pyright"]
 
-type = ["mypy", "types-colorama", "types-lxml", "types-requests"]
+type = ["ty", "types-requests"]
 
 lint = ["ruff"]
 
@@ -29,55 +37,57 @@ test = [
     "types-pyyaml",
     "detect-test-pollution",
     "requests-mock",
+    "httpx2",             # Required by fastapi.testclient.TestClient
 ]
 
 [tool.uv]
+package = true
 default-groups = ["dev", "test", "type", "lint"]
 
 
 [tool.ruff]
 cache-dir = "~/.cache/ruff"
-target-version = "py311"
 line-length = 120
 
 [tool.ruff.lint]
-extend-fixable = ["B", "I001"] # KG I think this means something...
+extend-fixable = ["B", "I001"] # I think this means something...
 extend-unsafe-fixes = [
     "F401",
-] # KG I don't like that this is fixed automatically (this doesnt work?)
-select = ["ALL"] # KG Include absolutely all of Ruff's rules.
+] # I don't like that this is fixed automatically (this doesnt work?)
+select = ["ALL"] # Include absolutely all of Ruff's rules.
 ignore = [
     # Modules
-    "DJ",  # KG Django not required
-    "PTH", # KG builtin 'open' is fine, not going to use pathlib
-    "DTZ", # KG no need to specify timezone for time objects
+    "DJ",  # Django not required
+    "PTH", # builtin 'open' is fine, not going to use pathlib
+    "DTZ", # no need to specify timezone for time objects
+    "CPY", # Copyright is LICENSE file
 
     # Specific rules
-    # "ANN101", # KG Why define self type for object functions...
-    "TD002",  # KG Verbose TODO, only I work on this project
-    "TD003",  # KG Verbose TODO, only I work on this project
-    "ISC001", # KG conflict in the formatter
-    "COM812", # KG conflict in the formatter
-    "G004",   # KG Fine to log this way
-    "S301",   # KG No user input, happy to use pickle
+    # "ANN101", # Why define self type for object functions...
+    "TD002",  # Verbose TODO, only I work on this project
+    "TD003",  # Verbose TODO, only I work on this project
+    "ISC001", # conflict in the formatter
+    "COM812", # conflict in the formatter
+    "G004",   # Fine to log this way
+    "S301",   # No user input, happy to use pickle
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*.py" = [
     # Modules
-    "ARG", # KG Unused function args -> fixtures nevertheless are functionally relevant
-    "FBT", # KG Don't care about booleans as positional arguments in tests, e.g. via @pytest.mark.parametrize()
-    "ANN", # KG Don't care about annotations in tests
-    "D",   # KG Don't care about docstrings in tests
+    "ARG", # Unused function args -> fixtures nevertheless are functionally relevant
+    "FBT", # Don't care about booleans as positional arguments in tests, e.g. via @pytest.mark.parametrize()
+    "ANN", # Don't care about annotations in tests
+    "D",   # Don't care about docstrings in tests
 
     # Specific rules
-    "S101",   # KG asserts allowed in tests.
-    "SLF001", # KG Accessing private members is needed for testing.
-    "INP001", # KG __init__.py not needed for PyTest.
-    "PT004",  # KG monkeypatches don't return.
-    "ANN001", # KG Tests don't need type hints.
-    "S311",   # KG I'll assume no real crypto will be done in PyTest.
-    "BLE001", # KG BaseException is fine in tests
+    "S101",   # asserts allowed in tests.
+    "SLF001", # Accessing private members is needed for testing.
+    "INP001", # __init__.py not needed for PyTest.
+    "PT004",  # monkeypatches don't return.
+    "ANN001", # Tests don't need type hints.
+    "S311",   # I'll assume no real crypto will be done in PyTest.
+    "BLE001", # BaseException is fine in tests
 
 ]
 
@@ -95,26 +105,12 @@ docstring-code-format = true
 docstring-code-line-length = 40
 
 [tool.pytest.ini_options]
-addopts = [
-    "--cov-context=test",
-    "--cov=ansibleinventorycmdb",
-    "--cov-report=term",
-    "--cov-report=html",
-]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+command_line = ".venv/bin/pytest -q"
+source = ["ansibleinventorycmdb"]
+context = "test"
 
 [tool.coverage.html]
 show_contexts = true
-
-[tool.mypy]
-files = ["ansibleinventorycmdb"]
-namespace_packages = true
-explicit_package_bases = true
-show_error_codes = true
-strict = false
-enable_error_code = [
-    "ignore-without-code",
-    "redundant-expr",
-    "truthy-bool",
-    "type-arg",
-]

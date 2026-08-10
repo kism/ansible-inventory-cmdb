@@ -5,10 +5,12 @@ from pathlib import Path
 
 import ansibleinventorycmdb
 
+REPO_ROOT = Path(__file__).parent.parent
+
 
 def test_version_pyproject() -> None:
     """Verify version in pyproject.toml matches package version."""
-    pyproject_path = Path("pyproject.toml")
+    pyproject_path = REPO_ROOT / "pyproject.toml"
     with pyproject_path.open("rb") as f:
         pyproject_toml = tomllib.load(f)
     assert pyproject_toml.get("project", {}).get("version", None) == ansibleinventorycmdb.__version__
@@ -16,7 +18,7 @@ def test_version_pyproject() -> None:
 
 def test_version_lock() -> None:
     """Verify version in uv.lock matches package version."""
-    lock_path = Path("uv.lock")
+    lock_path = REPO_ROOT / "uv.lock"
     with lock_path.open("rb") as f:
         uv_lock = tomllib.load(f)
 

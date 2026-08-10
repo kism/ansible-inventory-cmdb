@@ -3,11 +3,15 @@
 import os
 import pickle
 import re
+from typing import TYPE_CHECKING
 
 import requests
 import yaml
 
 from .logger import get_logger
+
+if TYPE_CHECKING:
+    from .config import Inventory
 
 logger = get_logger(__name__)
 
@@ -15,7 +19,7 @@ logger = get_logger(__name__)
 class AnsibleCMDB:
     """Ansible CMDB object."""
 
-    def __init__(self, inventory_dict: dict, instance_path: str) -> None:
+    def __init__(self, inventories: dict[str, Inventory], instance_path: str) -> None:
         """Initialise the Ansible CMDB object."""
         self._dump_file = os.path.join(instance_path, "cmdb_dump.yml")
         self._cache_file = os.path.join(instance_path, "url_cache.pkl")
@@ -24,10 +28,10 @@ class AnsibleCMDB:
         self.ready = False
         self.refresh_required = False
 
-        for inventory_name, inventory_in_dict in inventory_dict.items():
+        for inventory_name, inventory in inventories.items():
             self.inventories[inventory_name] = {
-                "url": inventory_in_dict["inventory_url"],
-                "base_url": re.sub(r"/inventory.*", "", inventory_in_dict["inventory_url"]),
+                "url": inventory.inventory_url,
+                "base_url": re.sub(r"/inventory.*", "", inventory.inventory_url),
             }
 
         self._load_url_cache()
@@ -86,7 +90,7 @@ class AnsibleCMDB:
         except KeyError:
             return {}
 
-    def _build_cmdb_groups(self, inventory_dict: dict) -> dict | None:
+    def _build_cmdb_groups(self, inventory_dict: dict) -> dict:
         """Build the CMDB groups from the inventory."""
         inventory_yaml = self._get_yaml(inventory_dict["url"])
 
@@ -102,7 +106,7 @@ class AnsibleCMDB:
 
         return groups
 
-    def _build_cmdb_hosts(self, inventory_dict: dict) -> dict | None:
+    def _build_cmdb_hosts(self, inventory_dict: dict) -> dict:
         """Build the CMDB hosts from the inventory."""
         inventory_yaml = self._get_yaml(inventory_dict["url"])
 
@@ -175,12 +179,11 @@ class AnsibleCMDB:
                 temp_text = response.text
 
             except TimeoutError:
+                logger.warning("Timeout getting URL: %s", url)
                 temp_text = "---\nerror: true\nmessage: Timeout error\nexception: TimeoutError"
-            except Exception as e:  # noqa: BLE001 This is to prevent a big crash
+            except Exception as e:  # noqa: BLE001 One bad inventory URL shouldn't take down the whole CMDB
+                logger.warning("Unhandled exception getting URL %s: %s", url, e)
                 temp_text = f"---\nerror: true\nmessage: Unhandled exception\nexception: {e}"
-
-            if "No mock address" in temp_text or "Failed to resolve 'pytest.internal'" in temp_text:
-                raise ValueError(temp_text)
 
             temp_yaml = yaml.safe_load(temp_text)
 

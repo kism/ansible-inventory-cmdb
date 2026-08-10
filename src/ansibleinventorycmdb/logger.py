@@ -5,7 +5,7 @@ import typing
 from logging.handlers import RotatingFileHandler
 from typing import cast
 
-from flask import Flask
+from pydantic import BaseModel, ConfigDict
 
 LOG_LEVELS = [
     "TRACE",
@@ -32,47 +32,49 @@ class CustomLogger(logging.Logger):
 logging.addLevelName(TRACE_LEVEL_NUM, "TRACE")
 logging.setLoggerClass(CustomLogger)
 
+
+class LoggingConfig(BaseModel):
+    """Logging configuration, path is a file to log to, empty means console only."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    level: str = "INFO"
+    path: str = ""
+
+
 # This is where we log to in this module, following the standard of every module.
 # I don't use the function so we can have this at the top
 logger = cast("CustomLogger", logging.getLogger(__name__))
 
 
-# In flask the root logger doesn't have any handlers, its all in app.logger
+# We configure the root logger so that uvicorn and any other module that logs inherits our config.
 # root_logger : root,
-# app.logger  : root, ansibleinventorycmdb,
 # logger      : root, ansibleinventorycmdb, ansibleinventorycmdb.module_name,
-# The issue is that waitress, werkzeug (any any other modules that log) will log separately.
-# The aim is, remove the default handler from the flask App and create one on the root logger to apply config to all.
 
 
-# Pass in the whole app object to make it obvious we are configuring the logger object within the app object.
-def setup_logger(app: Flask, logging_conf: dict, in_logger: logging.Logger | None = None) -> None:
+def setup_logger(logging_conf: LoggingConfig, in_logger: logging.Logger | None = None) -> None:
     """Setup the logger, set configuration per logging_conf.
 
     Args:
-        app: The Flask app, needed to get the app's logger object.
-        logging_conf: The logging configuration {"level": "", "path": ""}
+        logging_conf: The logging configuration.
         in_logger: Logger to configure, useful for testing.
     """
     if not in_logger:  # in_logger should only exist when testing with PyTest.
         in_logger = logging.getLogger()  # Get the root logger
 
-    # The root logger has no handlers initially in flask, app.logger does though.
-    app.logger.handlers.clear()  # Remove the Flask default handlers
-
     # If the logger doesn't have a console handler (root logger doesn't by default)
     if not _has_console_handler(in_logger):
         _add_console_handler(in_logger)
 
-    _set_log_level(in_logger, logging_conf["level"])
+    _set_log_level(in_logger, logging_conf.level)
 
     # If we are logging to a file
-    if not _has_file_handler(in_logger) and logging_conf["path"] != "":
-        _add_file_handler(in_logger, logging_conf["path"])
+    if not _has_file_handler(in_logger) and logging_conf.path != "":
+        _add_file_handler(in_logger, logging_conf.path)
 
     # Configure modules that are external and have their own loggers
-    logging.getLogger("waitress").setLevel(logging.INFO)  # Prod web server, info has useful info.
-    logging.getLogger("werkzeug").setLevel(logging.DEBUG)  # Only will be used in dev, debug logs incoming requests.
+    logging.getLogger("uvicorn").setLevel(logging.INFO)  # Web server, info has useful info.
+    logging.getLogger("uvicorn.access").setLevel(logging.INFO)  # Logs incoming requests.
     logging.getLogger("urllib3").setLevel(logging.WARNING)  # Bit noisy when set to info, used by requests module.
 
     logger.info("Logger configuration set!")

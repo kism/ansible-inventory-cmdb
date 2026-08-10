@@ -5,9 +5,6 @@ cmdb:
     schema_mapping:
       ansible_host: Hostname
       ansible_host_description: Description
-
-flask:
-  TESTING: true
 logging:
   level: INVALID
   path: ""
