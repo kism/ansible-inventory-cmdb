@@ -62,7 +62,11 @@ User-facing docs for this mode live in [README_Wrangler.md](README_Wrangler.md),
 - **The Worker gets the package by copy, not by dependency.** `pywrangler` resolves dependencies against the
   Pyodide index with `--no-build`, so a path dependency fails, and wrangler does not follow symlinks. The `build`
   command in `wrangler.jsonc` copies `src/ansibleinventorycmdb` next to the entrypoint on every dev and deploy;
-  the copy is gitignored. `worker/pyproject.toml` therefore repeats the package's runtime dependencies.
+  the copy is gitignored. Don't edit it — it is `rm -rf`'d on the next run. `worker/python_modules` is likewise
+  generated, re-synced by pywrangler whenever `pyproject.toml`/`pylock.toml` outdate its `.synced` token.
+- `worker/pyproject.toml` repeats the package's runtime dependencies by hand and is the one part of `worker/` that
+  doesn't self-maintain. `tests/test_worker_deps.py` fails if it drifts from the root `pyproject.toml`; if you add
+  a dependency that the Worker genuinely never imports, add it to `NOT_NEEDED_BY_THE_WORKER` there.
 - Non-`.py` files need a `rules` entry in `wrangler.jsonc` or they are silently left out of the bundle — that's
   what carries the templates, CSS and fonts.
 - Three imports are deferred so the Worker doesn't have to install what it never uses, or can't:
