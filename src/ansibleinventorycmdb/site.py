@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 import yaml
 from jinja2 import Environment, FileSystemLoader
 
-from .constants import PROGRAM_NAME_WITH_FULL_VERSION, PROGRAM_REPO_URL
+from .constants import PROGRAM_NAME_WITH_FULL_VERSION, PROGRAM_REPO_URL, PROGRAM_START_TIME
 from .logger import get_logger
 
 if TYPE_CHECKING:
@@ -111,6 +111,7 @@ def render_site(inventories: dict, cmdb_config: dict[str, Inventory]) -> Iterato
             "inventories": inventories,
             "program_version": PROGRAM_NAME_WITH_FULL_VERSION,
             "program_repo_url": PROGRAM_REPO_URL,
+            "program_start_time": PROGRAM_START_TIME,
         },
     ), HTML_CONTENT_TYPE
 
