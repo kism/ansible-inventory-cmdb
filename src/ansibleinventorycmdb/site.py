@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 import yaml
 from jinja2 import Environment, FileSystemLoader
 
+from .constants import PROGRAM_NAME_WITH_FULL_VERSION, PROGRAM_REPO_URL
 from .logger import get_logger
 
 if TYPE_CHECKING:
@@ -104,7 +105,14 @@ def render_site(inventories: dict, cmdb_config: dict[str, Inventory]) -> Iterato
         inventories: AnsibleCMDB.inventories, after a build.
         cmdb_config: Config.cmdb, for each inventory's schema_mapping.
     """
-    yield "index.html", _render("home.html.j2", {"inventories": inventories}), HTML_CONTENT_TYPE
+    yield "index.html", _render(
+        "home.html.j2",
+        {
+            "inventories": inventories,
+            "program_version": PROGRAM_NAME_WITH_FULL_VERSION,
+            "program_repo_url": PROGRAM_REPO_URL,
+        },
+    ), HTML_CONTENT_TYPE
 
     for name, inventory_dict in inventories.items():
         yield from _render_inventory(name, inventory_dict, dict(cmdb_config[name].schema_mapping))

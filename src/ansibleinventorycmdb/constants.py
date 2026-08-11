@@ -16,7 +16,7 @@ except PackageNotFoundError:  # pragma: no cover
 
 def _get_version_str() -> str:
     """Get a string representation of the version, including branch and commit hash."""
-    repo_root = Path(__file__).parent.parent
+    repo_root = Path(__file__).parent.parent.parent  # src/<pkg>/ -> repo root
     git_head_log = repo_root / ".git" / "logs" / "HEAD"
     git_head = repo_root / ".git" / "HEAD"
     last_commit = ""
@@ -26,7 +26,7 @@ def _get_version_str() -> str:
         with git_head_log.open("r") as f:
             lines = f.readlines()
             if lines:  # pragma: no cover # This doesn't get hit in CI
-                last_commit = lines[-1].strip().split(" ")[0][:7]  # Get the last commit hash, first 7 characters
+                last_commit = lines[-1].split(" ")[1][:7]  # reflog: "<old> <new> ..."
 
     if git_head.is_file():
         with git_head.open("r") as f:
