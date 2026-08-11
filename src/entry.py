@@ -9,6 +9,7 @@ To trigger a build during `pywrangler dev`, curl http://localhost:8787/cdn-cgi/h
 
 import hmac
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 import yaml
 from workers import Response, WorkerEntrypoint, fetch
@@ -40,17 +41,25 @@ class Default(WorkerEntrypoint):
         await self._build_and_upload()
 
     async def fetch(self, request) -> Response:  # noqa: ANN001 The runtime passes a JS Request
-        """Run a build on demand. Requires the BUILD_TOKEN secret as a bearer token.
+        """Run a build on demand. Requires the BUILD_TOKEN secret, as a bearer token or as `?token=`.
 
         The workers.dev URL is public, and a build costs ~75 requests against whatever hosts the inventory, so an
         unauthenticated endpoint here would be a free way to hammer someone else's server. Fails closed: with no
         BUILD_TOKEN configured there is no way in.
+
+        `?token=` is there because nothing in the Cloudflare dashboard can fire a deployed cron trigger, or send
+        an Authorization header. A URL is the only trigger you can click, so the query string is the browser's
+        way in. Both forms compare in constant time; encode() because compare_digest rejects non-ASCII str.
         """
         expected = getattr(self.env, "BUILD_TOKEN", None)
         presented = request.headers.get("authorization") or ""
+        in_url = parse_qs(urlparse(request.url).query).get("token", [""])[0]
 
         # 404 rather than 403, so an unauthenticated caller can't tell the endpoint apart from a missing one.
-        if not expected or not hmac.compare_digest(presented, f"Bearer {expected}"):
+        if not expected or not (
+            hmac.compare_digest(presented.encode(), f"Bearer {expected}".encode())
+            or hmac.compare_digest(in_url.encode(), expected.encode())
+        ):
             logger.warning("Rejected an unauthenticated build request")
             return Response("Not found", status=404)
 

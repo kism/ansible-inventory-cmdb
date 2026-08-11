@@ -70,8 +70,13 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md), not README.md.
 - Object keys are the app's URL paths with `/index.html` appended (`inventory/x/host/y/index.html`). The suffix is
   not cosmetic: without it the key `inventory/x` shadows the directory `inventory/x/host/`, which R2's flat
   keyspace tolerates but a filesystem or an `rclone sync` does not.
+- That key convention is depended on by config **outside this repo**: the deployed bucket's domain has a
+  zone-level URL Rewrite appending `index.html` to any path ending in `/`, because R2 has no index document and
+  `/` would otherwise 404. Recipe in [README_Wrangler.md](README_Wrangler.md). Changing the suffix breaks it.
 - Templates take `root_href` and `page_suffix` so the same template emits both link styles. The web app passes
-  `"/"` and `""`; the static site passes `"/index.html"` and `"/index.html"`.
+  `"/"` and `""`; the static site passes `"/index.html"` and `"/index.html"`. Don't be tempted to switch the
+  static site to bare `"/"` links now that the rewrite exists — `generate`d output browsed over `file://`, and
+  any static host without that rule, both rely on the explicit `index.html`.
 - **`wrangler.jsonc` has to sit next to `pyproject.toml`.** pywrangler takes the directory of the nearest
   `pyproject.toml` above the cwd as the project root and looks for the wrangler config *there*; `pylock.toml`,
   `python_modules/` and `.venv-workers/` are written there too. That's why all of it is at the repo root and there
@@ -108,7 +113,10 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md), not README.md.
   ad-hoc path can't drift from the scheduled one.
 - The `fetch` handler is guarded by the `BUILD_TOKEN` secret and **fails closed** — no token configured means every
   request 404s. Don't relax this: the `workers.dev` URL is public and each build is ~75 requests against whoever
-  hosts the inventory. It returns 404 rather than 403 so it doesn't advertise itself.
+  hosts the inventory. It returns 404 rather than 403 so it doesn't advertise itself. The token is taken from
+  either the `Authorization` header or `?token=`, because the dashboard has no way to fire a cron trigger or set a
+  header — a bookmarkable URL is the only trigger a browser can offer. Compare as `bytes`:
+  `hmac.compare_digest` raises `TypeError` on non-ASCII `str`, which would turn a junk token into a 500.
 - wrangler is pinned in `package.json`, not installed globally — run `npm install` at the repo root once.
   `pywrangler` shells out to `npx wrangler`, which prefers the local copy. Bumping it may require bumping
   `compatibility_date` too.
