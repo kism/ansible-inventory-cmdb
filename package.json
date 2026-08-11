@@ -1,9 +1,12 @@
 {
   "name": "ansible-inventory-cmdb",
   "private": true,
-  "description": "Pins wrangler for the Cloudflare Worker. pywrangler shells out to npx, which prefers this local copy over downloading one.",
+  "description": "Every Cloudflare command for this project is an npm script here. wrangler is pinned below so it needs no global install; dev/deploy go through pywrangler because the Worker is Python.",
   "scripts": {
     "fonts": "scripts/fetch-fonts.sh",
+    "login": "npx wrangler login --browser false",
+    "bucket": "npx wrangler r2 bucket create ansible-inventory-cmdb",
+    "tail": "npx wrangler tail --format pretty",
     "check-config": "test -L src/config.yml && test -f src/config.yml || { echo 'src/config.yml must be a symlink to instance/config.yml (gitignored, so create it if missing): ln -sf ../instance/config.yml src/config.yml. A missing or dangling link is bundled as nothing and the Worker dies on import; a real file there is a second config that silently drifts.'; exit 1; }",
     "predev": "npm run check-config",
     "dev": "uv run pywrangler dev",

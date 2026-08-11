@@ -54,7 +54,8 @@ uv run ansibleinventorycmdb-generate ./out
 ```
 
 Or let a cron-triggered Python Worker render every page into a public Cloudflare R2 bucket once a day. See
-[README_Wrangler.md](README_Wrangler.md).
+[README_Wrangler.md](README_Wrangler.md) to deploy it, and
+[README_Wrangler_dev.md](README_Wrangler_dev.md) to work on it.
 
 ## Configuration
 

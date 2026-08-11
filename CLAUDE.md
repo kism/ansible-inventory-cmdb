@@ -13,6 +13,11 @@ npm run fonts          # copies static/fonts from the @fontsource packages, see 
 scripts/build-token.sh set  # BUILD_TOKEN, needed before the Worker's on-demand build endpoint works
 ```
 
+**Every Cloudflare command is an `npm run` script** in `package.json` — `login`, `bucket`, `dev`, `deploy`,
+`tail`. `npx wrangler` and `uv run pywrangler` are what those scripts call; don't put them in docs or suggest
+them to the user. `pywrangler` proxies any subcommand it doesn't handle straight to `npx wrangler`, and syncs
+`python_modules` first for `dev`/`deploy` — the reason those two don't go through `npx` directly.
+
 One `pyproject.toml` covers all three modes. **`[project.dependencies]` is the Worker's install list** — pywrangler
 reads it and nothing else (no extras, no dependency-groups) and resolves it against the Pyodide index, so anything
 the Worker can't run belongs in the `server` extra. See *Dependency layout* below.
@@ -28,7 +33,7 @@ the Worker can't run belongs in the `server` extra. See *Dependency layout* belo
 | Type check              | `uv run ty check` and `uv run pyright`                                 |
 | Render the static site  | `uv run ansibleinventorycmdb-generate <output dir>`                    |
 | Dev server              | `uv run uvicorn ansibleinventorycmdb:create_app --factory --port 5100` |
-| Worker dev / deploy     | `uv run pywrangler dev` / `uv run pywrangler deploy` (from the repo root) |
+| Worker dev / deploy     | `npm run dev` / `npm run deploy` (from the repo root)                  |
 
 ## Architecture
 
@@ -64,7 +69,8 @@ definition time, so any module with a `TYPE_CHECKING`-only import used in a sign
 [`site.py`](src/ansibleinventorycmdb/site.py) renders every page up front instead of per request.
 [`src/entry.py`](src/entry.py) is a cron-triggered Python Worker that builds the CMDB and PUTs the result into a
 public R2 bucket. `uv run ansibleinventorycmdb-generate <dir>` does the same thing to a directory. User-facing docs
-for this mode live in [README_Wrangler.md](README_Wrangler.md), not README.md.
+for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying) and
+[README_Wrangler_dev.md](README_Wrangler_dev.md) (local dev, layout, dependency rules), not README.md.
 
 - `site.py` must not import FastAPI. It is the lower layer; `routes.py` imports `dump_vars`, `group_list` and
   `group_hosts` from it so both modes share one implementation.
@@ -103,7 +109,7 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md), not README.md.
   `create_app`/FastAPI in `__init__.py`, `httpx` in `cmdb.httpx_fetcher`, and `pwd` in `config._write_config`
   (Pyodide has no `pwd`).
 - **`compatibility_date` has two independent ceilings, and the second one is not obvious.** Newer than the workerd
-  binary wrangler ships with and `pywrangler dev` won't start. **2026-08-05 or later and the deploy is rejected**
+  binary wrangler ships with and `npm run dev` won't start. **2026-08-05 or later and the deploy is rejected**
   with `Dynamic require of "fs" is not supported` from `loadPyodide` — Pyodide fails to boot in Cloudflare's
   deploy-time validation. That reproduces on a zero-dependency hello-world Worker, so it is a platform bug, not
   anything in this repo; don't go looking in `entry.py` for it. Pinned to `2026-08-01`, the newest date that
@@ -129,7 +135,7 @@ extras and dependency-groups are invisible to it — and compiles that list agai
 `--no-build`. So that list is exactly "what the Worker installs", and it is load-bearing:
 
 - `[project.dependencies]`: `httpx`, `jinja2`, `pydantic`, `pyyaml`. All four have Pyodide wheels. Adding something
-  here without a Pyodide wheel breaks `pywrangler dev`/`deploy` at the resolve step, not at runtime.
+  here without a Pyodide wheel breaks `npm run dev`/`deploy` at the resolve step, not at runtime.
 - `[project.optional-dependencies].server`: `fastapi`, `uvicorn`. `uv sync --extra server`. The `test`
   dependency-group pulls it in as `ansibleinventorycmdb[server]`, so `uv sync` for development still gets it.
 - `[dependency-groups].worker`: `workers-py`, `workers-runtime-sdk`. In `default-groups`, so `uv run pywrangler`
