@@ -178,3 +178,4 @@ python_modules
 # wrangler local secrets
 .dev.vars
 src/config.yml
+output

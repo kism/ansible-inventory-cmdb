@@ -9,6 +9,7 @@ Presents Ansible inventories as a CMDB (Configuration Management Database) webpa
 uv sync                # Cloudflare Worker and static-site modes
 uv sync --extra server # ...plus the FastAPI web app
 npm install            # wrangler, pinned in package.json
+npm run fonts           # copies static/fonts from the @fontsource packages, see below
 ```
 
 One `pyproject.toml` covers all three modes. **`[project.dependencies]` is the Worker's install list** — pywrangler
@@ -46,6 +47,12 @@ src layout, installed as a package (hatchling). Imports are `ansibleinventorycmd
 
 Templates use `.html.j2` extension (Jinja2). Static assets (CSS, JS, fonts) are in
 [`src/ansibleinventorycmdb/static/`](src/ansibleinventorycmdb/static/), mounted at `/static`.
+
+The `.woff2` files under `static/fonts/` are checked in, but generated: `npm run fonts`
+([`scripts/fetch-fonts.sh`](scripts/fetch-fonts.sh)) copies the latin, non-variable weights `zy.css`'s `@font-face`
+rules reference out of the `@fontsource/fira-code`/`@fontsource/noto-sans-display` devDependencies, under the
+existing filenames. Re-run it after bumping either package or adding a weight to `zy.css`; don't hand-edit the
+`.woff2` files.
 
 `requires-python` is `>=3.13`, not 3.14, because the Worker runs on Pyodide. On 3.13 annotations are evaluated at
 definition time, so any module with a `TYPE_CHECKING`-only import used in a signature needs
