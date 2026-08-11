@@ -58,6 +58,27 @@ curl -H "Authorization: Bearer $BUILD_TOKEN" https://<your-worker>.workers.dev
 
 That's also how you get the site populated immediately after the first deploy, rather than waiting for 14:00 UTC.
 
+[`scripts/build-token.sh`](scripts/build-token.sh) wraps all of that:
+
+```bash
+scripts/build-token.sh set     # generate a token, store it, upload it to Cloudflare
+scripts/build-token.sh run     # trigger a build on the deployed Worker
+scripts/build-token.sh get     # print the token
+scripts/build-token.sh url     # print the bookmarkable trigger URL
+```
+
+It keeps the token in `.dev.vars` (gitignored, `chmod 600`), which is the *only* copy — `wrangler secret list`
+returns names, never values, so a token that only exists on Cloudflare cannot be read back. Lost it? `set` a new
+one. The workers.dev subdomain is account-specific and no wrangler command reports it, so `run` and `url` want
+it in the same file:
+
+```bash
+WORKER_URL="https://<your-worker>.workers.dev"
+```
+
+`WORKER_URL` from the environment wins over the file, which is how you point `run` at a dev server:
+`WORKER_URL=http://localhost:8787 scripts/build-token.sh run`.
+
 ### Triggering it without a terminal
 
 **The Cloudflare dashboard cannot fire a cron trigger.** There is no "run now" button; *Settings → Trigger

@@ -9,7 +9,8 @@ Presents Ansible inventories as a CMDB (Configuration Management Database) webpa
 uv sync                # Cloudflare Worker and static-site modes
 uv sync --extra server # ...plus the FastAPI web app
 npm install            # wrangler, pinned in package.json
-npm run fonts           # copies static/fonts from the @fontsource packages, see below
+npm run fonts          # copies static/fonts from the @fontsource packages, see below
+scripts/build-token.sh set  # BUILD_TOKEN, needed before the Worker's on-demand build endpoint works
 ```
 
 One `pyproject.toml` covers all three modes. **`[project.dependencies]` is the Worker's install list** — pywrangler
