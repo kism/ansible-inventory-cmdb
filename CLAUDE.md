@@ -82,6 +82,10 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md), not README.md.
   no instance path at runtime, and wrangler can only bundle what's under `base_dir` (`src/`), so the symlink is how
   the one file gets in. wrangler resolves it at bundle time. A clone with no `instance/config.yml` (the directory is
   gitignored) has a dangling symlink and the deploy fails there — create the config first.
+  wrangler drops a `rules` glob that matches nothing without a word, so the only symptom is `FileNotFoundError`
+  on `/session/metadata/config.yml` at import. `npm run dev`/`npm run deploy` preflight it (`check-config` in
+  `package.json`); bare `uv run pywrangler deploy` does not. The check also rejects a *regular* `src/config.yml`,
+  which editors have recreated when the link's target went missing — that's the two-configs bug coming back.
 - Three imports are deferred so the Worker doesn't have to install what it never uses, or can't:
   `create_app`/FastAPI in `__init__.py`, `httpx` in `cmdb.httpx_fetcher`, and `pwd` in `config._write_config`
   (Pyodide has no `pwd`).

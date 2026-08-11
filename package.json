@@ -3,7 +3,10 @@
   "private": true,
   "description": "Pins wrangler for the Cloudflare Worker. pywrangler shells out to npx, which prefers this local copy over downloading one.",
   "scripts": {
+    "check-config": "test -L src/config.yml && test -f src/config.yml || { echo 'src/config.yml must be a symlink to instance/config.yml (gitignored, so create it if missing): ln -sf ../instance/config.yml src/config.yml. A missing or dangling link is bundled as nothing and the Worker dies on import; a real file there is a second config that silently drifts.'; exit 1; }",
+    "predev": "npm run check-config",
     "dev": "uv run pywrangler dev",
+    "predeploy": "npm run check-config",
     "deploy": "uv run pywrangler deploy"
   },
   "devDependencies": {

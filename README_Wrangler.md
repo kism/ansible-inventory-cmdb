@@ -28,11 +28,13 @@ beside it.
 npx wrangler login --browser false
 npx wrangler r2 bucket create ansible-inventory-cmdb   # then enable public access on it in the dashboard
 $EDITOR instance/config.yml                            # src/config.yml is a symlink to it
-uv run pywrangler dev                                  # then trigger a build, see below
-uv run pywrangler deploy
+npm run dev                                            # then trigger a build, see below
+npm run deploy
 ```
 
-`npm run dev` and `npm run deploy` are shorthands for the last two.
+`npm run dev` and `npm run deploy` are the same two commands with a preflight check that `src/config.yml`
+is a symlink that resolves. Prefer them: a missing or dangling link is bundled as nothing at all, and the
+Worker then dies on import with `FileNotFoundError: /session/metadata/config.yml`.
 
 Cron Triggers don't fire during local development, so trigger a build by hand:
 
