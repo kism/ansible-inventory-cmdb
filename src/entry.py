@@ -72,7 +72,7 @@ class Default(WorkerEntrypoint):
         await cmdb.build(fetch_text)
 
         count = 0
-        for key, body, content_type in render_site(cmdb.inventories, CONFIG.cmdb):
+        for key, body, content_type in render_site(cmdb.inventories, CONFIG.cmdb, cmdb.built_at):
             await self.env.CMDB_BUCKET.put(key, body, httpMetadata={"contentType": content_type})
             count += 1
 

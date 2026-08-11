@@ -7,6 +7,7 @@ import contextlib
 import os
 import pickle
 import re
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import yaml
@@ -67,6 +68,7 @@ class AnsibleCMDB:
         self.url_cache: dict = {}
         self.ready = False
         self.refresh_required = False
+        self.built_at = ""  # Set by build(), see there for why it isn't a module-level constant
         # Recreated per build, since an asyncio primitive binds to the loop that first awaits it.
         self._request_limit = asyncio.Semaphore(CONCURRENT_REQUEST_LIMIT)
 
@@ -124,6 +126,10 @@ class AnsibleCMDB:
 
         if self._instance_path:
             await asyncio.to_thread(self._write_output)  # Blocking IO, keep it off the event loop
+
+        # Stamped here rather than at import: on a deployed Worker the clock reads 0 until the isolate has done
+        # I/O, so anything captured at module scope renders as 1970-01-01. By now the fetches have happened.
+        self.built_at = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
 
         logger.info("CMDB built")
         self.ready = True

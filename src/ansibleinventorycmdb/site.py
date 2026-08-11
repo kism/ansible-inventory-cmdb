@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 import yaml
 from jinja2 import Environment, FileSystemLoader
 
-from .constants import PROGRAM_NAME_WITH_FULL_VERSION, PROGRAM_REPO_URL, PROGRAM_START_TIME
+from .constants import PROGRAM_NAME_WITH_FULL_VERSION, PROGRAM_REPO_URL
 from .logger import get_logger
 
 if TYPE_CHECKING:
@@ -98,12 +98,16 @@ def _render(template: str, context: dict) -> bytes:
     return template_obj.render(root_href=STATIC_ROOT_HREF, page_suffix=STATIC_PAGE_SUFFIX, **context).encode()
 
 
-def render_site(inventories: dict, cmdb_config: dict[str, Inventory]) -> Iterator[tuple[str, bytes, str]]:
+def render_site(
+    inventories: dict, cmdb_config: dict[str, Inventory], built_at: str
+) -> Iterator[tuple[str, bytes, str]]:
     """Yield (object key, body, content type) for every page and static asset of the CMDB.
 
     Args:
         inventories: AnsibleCMDB.inventories, after a build.
         cmdb_config: Config.cmdb, for each inventory's schema_mapping.
+        built_at: AnsibleCMDB.built_at, shown in the footer. Passed in rather than read from the clock here,
+            so it is the time the data was built rather than the time this render happened to run.
     """
     yield (
         "index.html",
@@ -113,7 +117,7 @@ def render_site(inventories: dict, cmdb_config: dict[str, Inventory]) -> Iterato
                 "inventories": inventories,
                 "program_version": PROGRAM_NAME_WITH_FULL_VERSION,
                 "program_repo_url": PROGRAM_REPO_URL,
-                "program_start_time": PROGRAM_START_TIME,
+                "generated_at": built_at,
             },
         ),
         HTML_CONTENT_TYPE,
@@ -187,10 +191,10 @@ def _render_inventory(
         )
 
 
-def write_site(inventories: dict, cmdb_config: dict[str, Inventory], out_dir: Path) -> int:
+def write_site(inventories: dict, cmdb_config: dict[str, Inventory], out_dir: Path, built_at: str) -> int:
     """Write the whole site to a directory. Returns the number of objects written."""
     count = 0
-    for key, body, _ in render_site(inventories, cmdb_config):
+    for key, body, _ in render_site(inventories, cmdb_config, built_at):
         path = out_dir / key
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(body)
@@ -218,7 +222,7 @@ def main() -> None:
     cmdb = AnsibleCMDB(config.cmdb, instance_path)
     asyncio.run(cmdb.build())
 
-    count = write_site(cmdb.inventories, config.cmdb, out_dir)
+    count = write_site(cmdb.inventories, config.cmdb, out_dir, cmdb.built_at)
     logger.info("Wrote %s objects to %s", count, out_dir)
 
 

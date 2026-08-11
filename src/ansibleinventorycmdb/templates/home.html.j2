@@ -20,7 +20,7 @@
             </tr>
         {% for inventory, inventory_dict in inventories.items() %}<tr><td><a href="/inventory/{{ inventory }}{{ page_suffix }}">{{ inventory }}</a></td><td><a href="{{ inventory_dict['url'] }}">source</a></td><td>{{ inventory_dict['base_url'] }}</td></tr>{% endfor %}
         </table>
-        <footer><small><a href="{{ program_repo_url }}">{{ program_version }}</a><br />Generated: {{ program_start_time }}</small></footer>
+        <footer><small><a href="{{ program_repo_url }}">{{ program_version }}</a>{% if generated_at %}<br />Generated: {{ generated_at }}{% endif %}</small></footer>
     </main>
 </body>
 

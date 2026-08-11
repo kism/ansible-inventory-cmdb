@@ -37,9 +37,6 @@ Pyodide fails to boot during Cloudflare's deploy-time validation. This reproduce
 hello-world Python Worker, so it is a platform bug rather than anything in this project. `2026-08-01` is the
 newest date that deploys; re-test the boundary before raising it.
 
-A date newer than the workerd binary the pinned wrangler ships with stops `npm run dev` from starting at all, so
-bumping wrangler and bumping this tend to go together.
-
 ## Layout
 
 | Path                               | Role                                                            |
@@ -53,10 +50,6 @@ bumping wrangler and bumping this tend to go together.
 `src/entry.py` sits beside `src/ansibleinventorycmdb/` on purpose. wrangler bundles everything under the
 entrypoint's directory, so the package ships at the same path the entrypoint imports it from, with no copying,
 symlinking or path dependency involved.
-
-Non-`.py` files only make it into the bundle if a `rules` entry in `wrangler.jsonc` matches them — that is what
-carries the templates, CSS, fonts and `src/config.yml`. Add a new file type without one and it goes missing
-silently.
 
 ## The dependency list is the Worker's install list
 

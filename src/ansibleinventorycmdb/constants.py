@@ -1,17 +1,14 @@
 """Version tracking within the package."""
 
-from datetime import datetime
-from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-OUR_TIMEZONE = datetime.now().astimezone().tzinfo  # Normal things to do in Python
-PROGRAM_START_TIME = datetime.now(tz=OUR_TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %Z")
 PROGRAM_NAME = Path(__file__).parent.name.replace("_", "-").lower()  # Calculate this
 PROGRAM_REPO_URL = "https://github.com/kism/ansible-inventory-cmdb"
-try:
-    PROGRAM_VERSION = version(PROGRAM_NAME)
-except PackageNotFoundError:  # pragma: no cover
-    PROGRAM_VERSION = "<unknown, please run uv sync>"
+
+# Bump this and pyproject.toml together; test__meta.py fails if they drift, and again if uv.lock is stale.
+# Not `importlib.metadata.version()`: the Worker bundles this package as plain files with no dist-info
+# alongside, so the lookup raises PackageNotFoundError and the deployed site advertises "please run uv sync".
+PROGRAM_VERSION = "1.1.1.dev1"
 
 
 def _get_version_str() -> str:

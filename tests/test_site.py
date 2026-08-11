@@ -27,7 +27,10 @@ def site(tmp_path, get_test_config, build_cmdb) -> dict[str, tuple[bytes, str]]:
     """The whole rendered site from the test inventory, keyed by object key."""
     config = Config(**get_test_config("valid.yml"))
     cmdb = build_cmdb(AnsibleCMDB(config.cmdb, str(tmp_path)))
-    return {key: (body, content_type) for key, body, content_type in render_site(cmdb.inventories, config.cmdb)}
+    return {
+        key: (body, content_type)
+        for key, body, content_type in render_site(cmdb.inventories, config.cmdb, cmdb.built_at)
+    }
 
 
 def test_expected_keys(site):
