@@ -18,7 +18,8 @@ from ansibleinventorycmdb.config import Config
 from ansibleinventorycmdb.logger import get_logger, setup_logger
 from ansibleinventorycmdb.site import render_site
 
-# Bundled with the Worker, since there is no instance path to read a config from.
+# src/config.yml is a symlink to instance/config.yml, so there is only ever one config file. Workers have no
+# instance path to read one from at runtime, so it is bundled (wrangler resolves the symlink at bundle time).
 CONFIG = Config(**yaml.safe_load((Path(__file__).parent / "config.yml").read_text()))
 
 setup_logger(CONFIG.logging)

@@ -27,7 +27,7 @@ beside it.
 ```bash
 npx wrangler login --browser false
 npx wrangler r2 bucket create ansible-inventory-cmdb   # then enable public access on it in the dashboard
-$EDITOR src/config.yml                                 # same schema as instance/config.yml
+$EDITOR instance/config.yml                            # src/config.yml is a symlink to it
 uv run pywrangler dev                                  # then trigger a build, see below
 uv run pywrangler deploy
 ```
@@ -123,7 +123,7 @@ uv run ansibleinventorycmdb-generate ./out
 | Path                                   | Role                                                           |
 | -------------------------------------- | -------------------------------------------------------------- |
 | [`src/entry.py`](src/entry.py)         | `scheduled` (cron) and `fetch` (ad-hoc, token-guarded) handlers |
-| [`src/config.yml`](src/config.yml)     | The inventories to render, bundled with the Worker             |
+| `src/config.yml`                       | Symlink to `instance/config.yml`, bundled with the Worker       |
 | [`wrangler.jsonc`](wrangler.jsonc)     | Cron schedule, R2 binding, module rules                        |
 | [`pyproject.toml`](pyproject.toml)     | One project for all three run modes, see below                 |
 | [`package.json`](package.json)         | Pins wrangler, so no global install is needed                  |

@@ -78,6 +78,10 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md), not README.md.
   absolute `ansibleinventorycmdb.*` imports it has.
 - Non-`.py` files need a `rules` entry in `wrangler.jsonc` or they are silently left out of the bundle — that's
   what carries the templates, CSS, fonts and `src/config.yml`.
+- **There is one config file, `instance/config.yml`.** `src/config.yml` is a tracked symlink to it — the Worker has
+  no instance path at runtime, and wrangler can only bundle what's under `base_dir` (`src/`), so the symlink is how
+  the one file gets in. wrangler resolves it at bundle time. A clone with no `instance/config.yml` (the directory is
+  gitignored) has a dangling symlink and the deploy fails there — create the config first.
 - Three imports are deferred so the Worker doesn't have to install what it never uses, or can't:
   `create_app`/FastAPI in `__init__.py`, `httpx` in `cmdb.httpx_fetcher`, and `pwd` in `config._write_config`
   (Pyodide has no `pwd`).

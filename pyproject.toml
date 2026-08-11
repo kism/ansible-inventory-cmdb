@@ -31,7 +31,7 @@ ansibleinventorycmdb-generate = "ansibleinventorycmdb.site:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# src/ has non-package siblings now (entry.py and config.yml, the Worker's), so don't leave this to inference.
+# src/ has non-package siblings now (entry.py, and the config.yml symlink), so don't leave this to inference.
 [tool.hatch.build.targets.wheel]
 packages = ["src/ansibleinventorycmdb"]
 
