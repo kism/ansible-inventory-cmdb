@@ -1,6 +1,9 @@
 {% extends "base.html.j2" %}
 
-{% block title %}{{ __thing }} vars: {{ __host }}{% endblock %}
+{# __thing is 'host_vars' or 'group_vars'; humanised here so neither render path has to care. #}
+{% set thing_label = __thing.replace("_", " ") | capitalize %}
 
-{% block content %}<p><a href="{{ root_href }}">Inventories</a> / <a href="/inventory/{{ __inventory }}{{ page_suffix }}">{{ __inventory }}</a> / {{ __thing }}: <b>{{ __host }}</b></p>
+{% block title %}{{ thing_label }}: {{ __host }}{% endblock %}
+
+{% block content %}<p><a href="{{ root_href }}">Inventories</a> / <a href="/inventory/{{ __inventory }}{{ page_suffix }}">{{ __inventory }}</a> / {{ thing_label }}: <b>{{ __host }}</b></p>
         <code>{{ __vars }}</code>{% endblock %}

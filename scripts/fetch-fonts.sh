@@ -19,3 +19,7 @@ for weight in 400 500; do
   cp "$SRC/noto-sans-display/files/noto-sans-display-latin-$weight-italic.woff2" \
      "$DEST/noto-sans-display-latin-${weight}italic.woff2"
 done
+
+# 600 normal only: it exists to give <b> a real face instead of a synthesised one, and nothing is bold italic.
+cp "$SRC/noto-sans-display/files/noto-sans-display-latin-600-normal.woff2" \
+   "$DEST/noto-sans-display-latin-600.woff2"
