@@ -119,8 +119,8 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying) and
   `entry.py` has a `fetch` handler as well. Both handlers call `_build_and_upload`; keep it that way so the
   ad-hoc path can't drift from the scheduled one.
 - The `fetch` handler is guarded by the `BUILD_TOKEN` secret and **fails closed** — no token configured means every
-  request 404s. Don't relax this: the `workers.dev` URL is public and each build is ~75 requests against whoever
-  hosts the inventory. It returns 404 rather than 403 so it doesn't advertise itself. The token is taken from
+  request 404s. Don't relax this: the `workers.dev` URL is public and each build pulls a whole repo down from
+  whoever hosts the inventory. It returns 404 rather than 403 so it doesn't advertise itself. The token is taken from
   either the `Authorization` header or `?token=`, because the dashboard has no way to fire a cron trigger or set a
   header — a bookmarkable URL is the only trigger a browser can offer. Compare as `bytes`:
   `hmac.compare_digest` raises `TypeError` on non-ASCII `str`, which would turn a junk token into a 500.
@@ -161,9 +161,17 @@ read the already-built in-memory dicts — they never fetch.
 
 - **HTTP is injected, not hardcoded.** `build(fetch_text)` takes a `Callable[[str], Awaitable[str | None]]` —
   a URL in, the body out, `None` if the response wasn't OK — and threads it down instead of a session. It defaults
-  to `httpx_fetcher()`, one `httpx.AsyncClient` per build; `entry.py` passes the Workers runtime's `fetch`
-  instead, which is the path that's actually been run in a Worker. `httpx` is imported inside `httpx_fetcher`, so
-  the Worker never loads it.
+  to `httpx_fetcher()`, one `httpx.AsyncClient` per build; `entry.py` passes `github_zip_fetcher` over the Workers
+  runtime's `fetch` instead, which is the path that's actually been run in a Worker. `httpx` is imported inside
+  `httpx_fetcher`, so the Worker never loads it.
+- **`github_zip_fetcher` is what keeps the Worker under the free plan's subrequest limit.** A build probes every
+  host and group at two paths, ~81 requests for the real inventory, and the free plan allows **50 external
+  subrequests per invocation** — that's the `Too many subrequests` exception. It serves
+  `raw.githubusercontent.com` URLs out of one `codeload.github.com` zip per repo instead, so a build costs one
+  external subrequest. The R2 puts don't compete with it: requests to Cloudflare services have their own 1000
+  budget. Non-GitHub URLs, unreadable zips and branch names containing `/` fall back to a request per file, so
+  the fetcher is safe to hand any config. `limits.subrequests` in `wrangler.jsonc` does **not** help — the free
+  plan's 50 is a ceiling, not a default.
 - `httpx_fetcher` needs `follow_redirects=True` (httpx doesn't redirect by default, aiohttp did) and must **not**
   call `raise_for_status()`. A host or group with no vars file 404s on every single build — that's the normal case,
   and it has to come back as `None`, not an exception. httpx's own INFO logging is turned down in `logger.py`,

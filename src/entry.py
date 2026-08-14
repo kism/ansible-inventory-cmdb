@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, urlparse
 import yaml
 from workers import Response, WorkerEntrypoint, fetch
 
-from ansibleinventorycmdb.cmdb import AnsibleCMDB
+from ansibleinventorycmdb.cmdb import AnsibleCMDB, github_zip_fetcher
 from ansibleinventorycmdb.config import Config
 from ansibleinventorycmdb.logger import get_logger, setup_logger
 from ansibleinventorycmdb.site import render_site
@@ -27,10 +27,13 @@ setup_logger(CONFIG.logging)
 logger = get_logger(__name__)
 
 
-async def fetch_text(url: str) -> str | None:
-    """Fetch a URL with the Workers runtime's fetch, rather than cmdb.py's default httpx client."""
+async def fetch_bytes(url: str) -> bytes | None:
+    """Fetch a URL with the Workers runtime's fetch, rather than cmdb.py's default httpx client.
+
+    Bytes rather than text because github_zip_fetcher, which this is handed to, pulls down repo zips.
+    """
     response = await fetch(url)
-    return await response.text() if response.ok else None
+    return await response.bytes() if response.ok else None
 
 
 class Default(WorkerEntrypoint):
@@ -43,7 +46,7 @@ class Default(WorkerEntrypoint):
     async def fetch(self, request) -> Response:  # noqa: ANN001 The runtime passes a JS Request
         """Run a build on demand. Requires the BUILD_TOKEN secret, as a bearer token or as `?token=`.
 
-        The workers.dev URL is public, and a build costs ~75 requests against whatever hosts the inventory, so an
+        The workers.dev URL is public, and a build pulls a whole repo down from whoever hosts the inventory, so an
         unauthenticated endpoint here would be a free way to hammer someone else's server. Fails closed: with no
         BUILD_TOKEN configured there is no way in.
 
@@ -69,7 +72,9 @@ class Default(WorkerEntrypoint):
     async def _build_and_upload(self) -> int:
         """Build the CMDB and PUT every rendered page into R2. Returns the number of objects written."""
         cmdb = AnsibleCMDB(CONFIG.cmdb)  # No instance path: Workers have no writable filesystem
-        await cmdb.build(fetch_text)
+        # One zip per repo, not one request per file: the free plan allows 50 external subrequests per invocation
+        # and a build needs ~75. The R2 puts below come out of a separate, larger budget.
+        await cmdb.build(github_zip_fetcher(fetch_bytes))
 
         count = 0
         for key, body, content_type in render_site(cmdb.inventories, CONFIG.cmdb, cmdb.built_at):

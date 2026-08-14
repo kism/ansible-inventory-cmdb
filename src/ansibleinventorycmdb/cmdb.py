@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import io
 import os
 import pickle
 import re
+import zipfile
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -21,11 +23,16 @@ if TYPE_CHECKING:
 
     # Fetch a URL, return its body, or None if the response wasn't OK. See AnsibleCMDB.build.
     FetchText = Callable[[str], Awaitable[str | None]]
+    FetchBytes = Callable[[str], Awaitable[bytes | None]]
 
 logger = get_logger(__name__)
 
 REQUEST_TIMEOUT_SECONDS = 5
 CONCURRENT_REQUEST_LIMIT = 10  # Be polite to whatever is hosting the inventory
+
+# owner/repo, branch and path of a raw.githubusercontent.com URL. A branch containing "/" won't match, and falls
+# back to being fetched a file at a time — the branch and the path would be ambiguous.
+GITHUB_RAW_URL = re.compile(r"https://raw\.githubusercontent\.com/([^/]+/[^/]+)/refs/heads/([^/]+)/(.+)")
 
 
 @contextlib.asynccontextmanager
@@ -48,6 +55,71 @@ async def httpx_fetcher() -> AsyncIterator[FetchText]:
             return response.text if response.is_success else None
 
         yield fetch_text
+
+
+async def _open_repo_zip(repo: str, branch: str, fetch_bytes: FetchBytes) -> Callable[[str], str | None] | None:
+    """Fetch a GitHub repo as a zip, as a `path in the repo -> file contents` reader. None if it couldn't be read.
+
+    Files are read out of the archive on demand rather than up front, since a repo holds far more yaml than one
+    build looks at.
+    """
+    url = f"https://codeload.github.com/{repo}/zip/refs/heads/{branch}"
+    logger.info("Fetching repo archive: %s", url)
+
+    body = await fetch_bytes(url)
+    if body is None:
+        logger.warning("Could not fetch %s, falling back to a request per file", url)
+        return None
+
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(body))
+        # Everything sits under one "<repo>-<branch>/" directory. Take it from the archive rather than build it:
+        # GitHub rewrites characters in the branch name.
+        root = archive.namelist()[0].split("/", 1)[0]
+    except (zipfile.BadZipFile, IndexError):
+        logger.warning("%s is not a readable zip, falling back to a request per file", url)
+        return None
+
+    def read(path: str) -> str | None:
+        try:
+            return archive.read(f"{root}/{path}").decode()
+        except KeyError:  # No such file in the repo, same as the 404 a per-file fetch would have got
+            return None
+
+    return read
+
+
+def github_zip_fetcher(fetch_bytes: FetchBytes) -> FetchText:
+    """Serve raw.githubusercontent.com URLs out of one zip per repo, rather than one request per file.
+
+    A Worker on the free plan gets 50 external subrequests per invocation, and a build of a real inventory needs
+    around 75 — every host and group is probed at two paths. Those files all live in the same repo, so downloading
+    it once from codeload.github.com costs one subrequest per repo instead. Requests to Cloudflare services (the
+    R2 puts) come out of a separate 1000 budget, so they are not the problem here.
+
+    Anything that isn't a GitHub raw URL, and anything from a repo whose zip couldn't be read, is fetched
+    normally. A path that isn't in the zip returns None, which is what a missing vars file already looks like.
+    """
+    readers: dict[str, Callable[[str], str | None] | None] = {}
+
+    async def fetch_url(url: str) -> str | None:
+        body = await fetch_bytes(url)
+        return body.decode() if body is not None else None
+
+    async def fetch_text(url: str) -> str | None:
+        match = GITHUB_RAW_URL.fullmatch(url)
+        if not match:
+            return await fetch_url(url)
+
+        repo, branch, path = match.groups()
+        key = f"{repo}/{branch}"
+        if key not in readers:  # Cached even when it's None, so a broken zip isn't re-fetched per file
+            readers[key] = await _open_repo_zip(repo, branch, fetch_bytes)
+
+        reader = readers[key]
+        return reader(path) if reader else await fetch_url(url)
+
+    return fetch_text
 
 
 class AnsibleCMDB:
