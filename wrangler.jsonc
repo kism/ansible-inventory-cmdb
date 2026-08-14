@@ -23,7 +23,11 @@
 				"**/*.yml",
 				"**/*.css",
 				"**/*.js",
-				"**/*.woff2"
+				"**/*.woff2",
+				"**/*.ico",
+				"**/*.png",
+				"**/*.webmanifest",
+				"**/*.txt"
 			],
 			"fallthrough": true
 		}

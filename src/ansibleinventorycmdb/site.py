@@ -34,8 +34,16 @@ STATIC_DIR = Path(__file__).parent / "static"
 HTML_CONTENT_TYPE = "text/html; charset=utf-8"
 JSON_CONTENT_TYPE = "application/json"
 
-# Only the extensions that actually live in static/. stdlib mimetypes doesn't know woff2.
-CONTENT_TYPES = {".css": "text/css", ".js": "text/javascript", ".woff2": "font/woff2"}
+# Only the extensions that actually live in static/. stdlib mimetypes doesn't know woff2 or webmanifest.
+CONTENT_TYPES = {
+    ".css": "text/css",
+    ".js": "text/javascript",
+    ".woff2": "font/woff2",
+    ".ico": "image/x-icon",
+    ".png": "image/png",
+    ".webmanifest": "application/manifest+json",
+    ".txt": "text/plain; charset=utf-8",
+}
 
 # A static host has no index document, so every page has to be linked to by name. Naming them all index.html also
 # keeps a page key from shadowing the directory its children live in (`inventory/x` vs `inventory/x/host/y`), which
