@@ -51,7 +51,10 @@ src layout, installed as a package (hatchling). Imports are `ansibleinventorycmd
 | [`src/ansibleinventorycmdb/logger.py`](src/ansibleinventorycmdb/logger.py)     | `LoggingConfig`, custom logger with TRACE level (5); use `get_logger(__name__)`   |
 | [`src/entry.py`](src/entry.py)                                                | The Cloudflare Worker's entrypoint. Not part of the package, see below           |
 
-Templates use `.html.j2` extension (Jinja2). Static assets (CSS, JS, fonts) are in
+Templates use `.html.j2` extension (Jinja2) and all extend `base.html.j2`, which owns the `<head>`, the `<h2>`
+heading and the `sorttable.js` tag — a new page supplies a `title` and a `content` block, nothing else. Both render
+paths resolve the inheritance off the same `FileSystemLoader`, so it needs no code change either side. Static
+assets (CSS, JS, fonts, favicon) are in
 [`src/ansibleinventorycmdb/static/`](src/ansibleinventorycmdb/static/), mounted at `/static`.
 
 The `.woff2` files under `static/fonts/` are checked in, but generated: `npm run fonts`

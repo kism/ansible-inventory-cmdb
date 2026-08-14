@@ -1,20 +1,6 @@
-<!doctype html>
-<html lang="en">
+{% extends "base.html.j2" %}
 
-<head>
-    <title>Ansible Inventory CMDB</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta http-equiv="X-Clacks-Overhead" content="GNU Terry Pratchett" />
-    <link rel="stylesheet" href="/static/zy.css" />
-    <link rel="icon" href="/static/favicon/favicon.ico" />
-    <link rel="apple-touch-icon" href="/static/favicon/apple-touch-icon.png" />
-    <link rel="manifest" href="/static/favicon/site.webmanifest" />
-</head>
-
-<body>
-    <main>
-        <h2>Ansible Inventory CMDB</h2>
-        <p><b>Inventories</b></p>
+{% block content %}<p><b>Inventories</b></p>
         <table>
             <tr>
                 <th>Inventory</th>
@@ -23,8 +9,4 @@
             </tr>
         {% for inventory, inventory_dict in inventories.items() %}<tr><td><a href="/inventory/{{ inventory }}{{ page_suffix }}">{{ inventory }}</a></td><td><a href="{{ inventory_dict['url'] }}">source</a></td><td>{{ inventory_dict['base_url'] }}</td></tr>{% endfor %}
         </table>
-        <footer><small><a href="{{ program_repo_url }}">{{ program_version }}</a>{% if generated_at %}<br />Generated: {{ generated_at }}{% endif %}</small></footer>
-    </main>
-</body>
-
-</html>
+        <footer><small><a href="{{ program_repo_url }}">{{ program_version }}</a>{% if generated_at %}<br />Generated: {{ generated_at }}{% endif %}</small></footer>{% endblock %}

@@ -1,22 +1,6 @@
-<!doctype html>
-<html lang="en">
+{% extends "base.html.j2" %}
 
-<head>
-    <title>{{ __thing }} vars: {{ __host }}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta http-equiv="X-Clacks-Overhead" content="GNU Terry Pratchett" />
-    <link rel="stylesheet" href="/static/zy.css" />
-    <link rel="icon" href="/static/favicon/favicon.ico" />
-    <link rel="apple-touch-icon" href="/static/favicon/apple-touch-icon.png" />
-    <link rel="manifest" href="/static/favicon/site.webmanifest" />
-</head>
+{% block title %}{{ __thing }} vars: {{ __host }}{% endblock %}
 
-<body>
-    <main>
-        <h2>Ansible Inventory CMDB</h2>
-        <p><a href="{{ root_href }}">Inventories</a> / <a href="/inventory/{{ __inventory }}{{ page_suffix }}">{{ __inventory }}</a> / {{ __thing }}: <b>{{ __host }}</b></p>
-        <code>{{ __vars }}</code>
-    </main>
-</body>
-
-</html>
+{% block content %}<p><a href="{{ root_href }}">Inventories</a> / <a href="/inventory/{{ __inventory }}{{ page_suffix }}">{{ __inventory }}</a> / {{ __thing }}: <b>{{ __host }}</b></p>
+        <code>{{ __vars }}</code>{% endblock %}
