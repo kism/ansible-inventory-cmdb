@@ -9,7 +9,7 @@ PROGRAM_REPO_URL = "https://github.com/kism/ansible-inventory-cmdb"
 # Bump this and pyproject.toml together; test__meta.py fails if they drift, and again if uv.lock is stale.
 # Not `importlib.metadata.version()`: the Worker bundles this package as plain files with no dist-info
 # alongside, so the lookup raises PackageNotFoundError and the deployed site advertises "please run uv sync".
-PROGRAM_VERSION = "1.1.1.dev1"
+PROGRAM_VERSION = "1.2.0"
 
 PROGRAM_NAME_WITH_VERSION = f"{PROGRAM_NAME} v{PROGRAM_VERSION}"
 
