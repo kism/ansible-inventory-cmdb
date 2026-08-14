@@ -1,0 +1,15 @@
+{
+  "extraKnownMarketplaces": {
+    "astral-sh": {
+      "source": {
+        "source": "github",
+        "repo": "astral-sh/claude-code-plugins"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "cloudflare@claude-plugins-official": true,
+    "astral@astral-sh": true,
+    "ponytail@ponytail": true
+  }
+}

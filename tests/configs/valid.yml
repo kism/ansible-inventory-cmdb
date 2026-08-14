@@ -6,5 +6,5 @@ cmdb:
       ansible_host: Hostname
       ansible_host_description: Description
 logging:
-  level: INVALID
+  level: INFO
   path: ""

@@ -1,0 +1,58 @@
+{
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "ansible-inventory-cmdb",
+	// base_dir defaults to the entrypoint's directory, so src/ansibleinventorycmdb is already bundled as a sibling
+	// of entry.py, exactly as it is imported. Nothing needs copying in.
+	"main": "src/entry.py",
+	// Do not bump this blindly. Two separate ceilings:
+	//   - newer than the workerd binary wrangler ships with => `pywrangler dev` refuses to start
+	//   - 2026-08-05 and later => Pyodide fails to boot in Cloudflare's deploy-time validation with
+	//     `Dynamic require of "fs" is not supported`, which rejects the deploy. Reproduced on a
+	//     zero-dependency hello-world Worker, so it is a platform bug, not ours. 2026-08-01 is the
+	//     newest date that deploys. Re-test the boundary before raising it.
+	"compatibility_date": "2026-08-01",
+	"compatibility_flags": [
+		"python_workers"
+	],
+	// Without these only .py files are bundled, and the templates, CSS and fonts would silently go missing.
+	"rules": [
+		{
+			"type": "Data",
+			"globs": [
+				"**/*.j2",
+				"**/*.yml",
+				"**/*.css",
+				"**/*.js",
+				"**/*.woff2",
+				"**/*.ico",
+				"**/*.png",
+				"**/*.webmanifest",
+				"**/*.txt"
+			],
+			"fallthrough": true
+		}
+	],
+	// The commit the bundle was built from, shown in the page footer. Empty here on purpose: `npm run deploy`
+	// overrides it with `--var COMMIT_SHA:$(git rev-parse --short HEAD)`, so a `pywrangler deploy` run by hand
+	// just gets no sha rather than a stale one.
+	"vars": {
+		"COMMIT_SHA": ""
+	},
+	// Daily at 14:00 UTC. Cron Triggers always run on UTC.
+	"triggers": {
+		"crons": [
+			"0 14 * * *"
+		]
+	},
+	// Create with: wrangler r2 bucket create ansible-inventory-cmdb
+	// then enable public access on it (custom domain, or the r2.dev development URL).
+	"r2_buckets": [
+		{
+			"binding": "CMDB_BUCKET",
+			"bucket_name": "ansible-inventory-cmdb"
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
+}

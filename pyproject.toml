@@ -1,22 +1,44 @@
 [project]
 name = "ansibleinventorycmdb"
-version = "1.1.0"
+version = "1.2.0"
 description = "Generates a CMDB webpage from an ansible git repository"
 authors = [{ name = "Kieran Gee", email = "kieran.lost.the.game@gmail.com" }]
 readme = "README.md"
-requires-python = ">=3.13"
+license = "MIT"
+requires-python = ">=3.13"                                                    # 3.13 is what Pyodide runs, see wrangler.jsonc
+
+# pywrangler reads *only* this list and installs it into the Worker, so everything here must have a Pyodide wheel
+# and everything the Worker can't use belongs in an extra below. See README_Wrangler_dev.md.
 dependencies = [
-    "flask>=3.1.0",
-    "flask-caching>=2.4.0",
+    "httpx>=0.28.1",    # Pyodide's build is patched to use fetch(); aiohttp has no usable wasm wheel at all
+    "jinja2>=3.1.6",    # Not pulled in by fastapi, needed for Jinja2Templates
+    "pydantic>=2.10.6", # Used directly by config.py and logger.py, not just via fastapi
     "pyyaml>=6.0.2",
-    "requests>=2.32.3",
-    "waitress>=3.0.2",
 ]
+
+# The web app, which neither the Worker nor `ansibleinventorycmdb-generate` needs: uv sync --extra server
+[project.optional-dependencies]
+server = ["fastapi>=0.115.0", "uvicorn[standard]>=0.34.0"]
+
+[project.urls]
+Repository = "https://github.com/kism/ansible-inventory-cmdb"
+
+[project.scripts]
+ansibleinventorycmdb = "ansibleinventorycmdb.__main__:main"
+ansibleinventorycmdb-generate = "ansibleinventorycmdb.site:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# src/ has non-package siblings now (entry.py, and the config.yml symlink), so don't leave this to inference.
+[tool.hatch.build.targets.wheel]
+packages = ["src/ansibleinventorycmdb"]
 
 [dependency-groups]
 dev = ["pyright"]
 
-type = ["mypy", "types-colorama", "types-lxml", "types-requests"]
+type = ["ty"]
 
 lint = ["ruff"]
 
@@ -25,60 +47,79 @@ test = [
     "pytest-cov",
     "pytest-mock",
     "pytest-random-order",
-    "types-requests",
     "types-pyyaml",
     "detect-test-pollution",
-    "requests-mock",
+    "httpx2",                       # Required by fastapi.testclient.TestClient
+    "ansibleinventorycmdb[server]", # The tests exercise the web app, so they need the extra
 ]
 
-[tool.uv]
-default-groups = ["dev", "test", "type", "lint"]
+# The Cloudflare Worker toolchain. pywrangler shells out to `npx wrangler`, which is pinned in package.json.
+worker = ["workers-py", "workers-runtime-sdk"]
 
+[tool.uv]
+package = true
+default-groups = ["dev", "test", "type", "lint", "worker"]
+
+
+# src/entry.py imports the `workers` SDK, which only exists inside the Pyodide runtime.
+[tool.ty.src]
+exclude = ["src/entry.py"]
+
+[tool.pyright]
+exclude = [
+    "**/__pycache__, **/.*",
+    "src/entry.py",
+    "**/.venv",
+    ".venv-workers",         # pywrangler's Pyodide-pinned venv
+    "python_modules",        # pywrangler's vendored Worker dependencies
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+]
 
 [tool.ruff]
 cache-dir = "~/.cache/ruff"
-target-version = "py311"
 line-length = 120
 
 [tool.ruff.lint]
-extend-fixable = ["B", "I001"] # KG I think this means something...
-extend-unsafe-fixes = [
-    "F401",
-] # KG I don't like that this is fixed automatically (this doesnt work?)
-select = ["ALL"] # KG Include absolutely all of Ruff's rules.
+select = ["ALL"] # Include absolutely all of Ruff's rules.
 ignore = [
     # Modules
-    "DJ",  # KG Django not required
-    "PTH", # KG builtin 'open' is fine, not going to use pathlib
-    "DTZ", # KG no need to specify timezone for time objects
+    "DJ",  # Django not required
+    "PTH", # builtin 'open' is fine, not going to use pathlib
+    "DTZ", # no need to specify timezone for time objects
+    "CPY", # Copyright is LICENSE file
 
     # Specific rules
-    # "ANN101", # KG Why define self type for object functions...
-    "TD002",  # KG Verbose TODO, only I work on this project
-    "TD003",  # KG Verbose TODO, only I work on this project
-    "ISC001", # KG conflict in the formatter
-    "COM812", # KG conflict in the formatter
-    "G004",   # KG Fine to log this way
-    "S301",   # KG No user input, happy to use pickle
+    # "ANN101", # Why define self type for object functions...
+    "TD002",  # Verbose TODO, only I work on this project
+    "TD003",  # Verbose TODO, only I work on this project
+    "ISC001", # conflict in the formatter
+    "COM812", # conflict in the formatter
+    "G004",   # Fine to log this way
+    "S301",   # No user input, happy to use pickle
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"src/entry.py" = [
+    "INP001", # The Worker entrypoint is a top-level module in the bundle, not part of the package
+]
+
 "tests/*.py" = [
     # Modules
-    "ARG", # KG Unused function args -> fixtures nevertheless are functionally relevant
-    "FBT", # KG Don't care about booleans as positional arguments in tests, e.g. via @pytest.mark.parametrize()
-    "ANN", # KG Don't care about annotations in tests
-    "D",   # KG Don't care about docstrings in tests
+    "ARG", # Unused function args -> fixtures nevertheless are functionally relevant
+    "FBT", # Don't care about booleans as positional arguments in tests, e.g. via @pytest.mark.parametrize()
+    "ANN", # Don't care about annotations in tests
+    "D",   # Don't care about docstrings in tests
 
     # Specific rules
-    "S101",   # KG asserts allowed in tests.
-    "SLF001", # KG Accessing private members is needed for testing.
-    "INP001", # KG __init__.py not needed for PyTest.
-    "PT004",  # KG monkeypatches don't return.
-    "ANN001", # KG Tests don't need type hints.
-    "S311",   # KG I'll assume no real crypto will be done in PyTest.
-    "BLE001", # KG BaseException is fine in tests
-
+    "S101",   # asserts allowed in tests.
+    "SLF001", # Accessing private members is needed for testing.
+    "INP001", # __init__.py not needed for PyTest.
+    "PT004",  # monkeypatches don't return.
+    "ANN001", # Tests don't need type hints.
+    "S311",   # I'll assume no real crypto will be done in PyTest.
+    "BLE001", # BaseException is fine in tests
 ]
 
 
@@ -95,26 +136,12 @@ docstring-code-format = true
 docstring-code-line-length = 40
 
 [tool.pytest.ini_options]
-addopts = [
-    "--cov-context=test",
-    "--cov=ansibleinventorycmdb",
-    "--cov-report=term",
-    "--cov-report=html",
-]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+command_line = ".venv/bin/pytest -q"
+source = ["ansibleinventorycmdb"]
+context = "test"
 
 [tool.coverage.html]
 show_contexts = true
-
-[tool.mypy]
-files = ["ansibleinventorycmdb"]
-namespace_packages = true
-explicit_package_bases = true
-show_error_codes = true
-strict = false
-enable_error_code = [
-    "ignore-without-code",
-    "redundant-expr",
-    "truthy-bool",
-    "type-arg",
-]
