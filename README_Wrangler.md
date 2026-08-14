@@ -43,11 +43,10 @@ you use it.
 ```bash
 scripts/build-token.sh set     # generate a token, store it, upload it to Cloudflare
 scripts/build-token.sh run     # trigger a build on the deployed Worker
-scripts/build-token.sh get     # print the token
-scripts/build-token.sh url     # print the bookmarkable trigger URL
+scripts/build-token.sh url     # print the bookmarkable trigger URL, token included
 ```
 
-It keeps the token in `.dev.vars` (gitignored, `chmod 600`), the **only** copy — `wrangler secret list` returns
+It keeps the token in `.dev.vars` (gitignored, `umask 077`), the **only** copy — `wrangler secret list` returns
 names, never values, so one that lives only on Cloudflare can't be read back. Lost it? `set` a new one. Add the
 workers.dev subdomain to the same file, since no wrangler command reports it:
 

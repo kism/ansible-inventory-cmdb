@@ -8,6 +8,7 @@ To trigger a build during `pywrangler dev`, curl http://localhost:8787/cdn-cgi/h
 """
 
 import hmac
+import os
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -16,6 +17,7 @@ from workers import Response, WorkerEntrypoint, fetch
 
 from ansibleinventorycmdb.cmdb import AnsibleCMDB, github_zip_fetcher
 from ansibleinventorycmdb.config import Config
+from ansibleinventorycmdb.constants import COMMIT_SHA_ENV_VAR
 from ansibleinventorycmdb.logger import get_logger, setup_logger
 from ansibleinventorycmdb.site import render_site
 
@@ -71,6 +73,11 @@ class Default(WorkerEntrypoint):
 
     async def _build_and_upload(self) -> int:
         """Build the CMDB and PUT every rendered page into R2. Returns the number of objects written."""
+        # constants.version_string() reads this from the environment, which is the only channel all three modes
+        # share. Set here rather than at import: a wrangler var only exists on `env`, which the runtime hands to
+        # a handler. Both handlers funnel through here, so it is always set before render_site() reads it.
+        os.environ[COMMIT_SHA_ENV_VAR] = getattr(self.env, "COMMIT_SHA", "") or ""
+
         cmdb = AnsibleCMDB(CONFIG.cmdb)  # No instance path: Workers have no writable filesystem
         # One zip per repo, not one request per file: the free plan allows 50 external subrequests per invocation
         # and a build needs ~75. The R2 puts below come out of a separate, larger budget.

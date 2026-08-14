@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from .cmdb import AnsibleCMDB
-from .constants import PROGRAM_NAME_WITH_FULL_VERSION, PROGRAM_REPO_URL, PROGRAM_VERSION
+from .constants import PROGRAM_REPO_URL, PROGRAM_VERSION, version_string
 from .logger import get_logger
 from .site import TEMPLATES_DIR, dump_vars, group_hosts, group_list
 
@@ -105,7 +105,7 @@ def home(request: Request, cmdb: CMDB) -> HTMLResponse:
             "inventories": cmdb.get_inventories(),
             "root_href": ROOT_HREF,
             "page_suffix": PAGE_SUFFIX,
-            "program_version": PROGRAM_NAME_WITH_FULL_VERSION,
+            "program_version": version_string(),
             "program_repo_url": PROGRAM_REPO_URL,
             "generated_at": cmdb.built_at,
         },

@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 import yaml
 from jinja2 import Environment, FileSystemLoader
 
-from .constants import PROGRAM_NAME_WITH_FULL_VERSION, PROGRAM_REPO_URL
+from .constants import PROGRAM_REPO_URL, version_string
 from .logger import get_logger
 
 if TYPE_CHECKING:
@@ -115,7 +115,7 @@ def render_site(
             "home.html.j2",
             {
                 "inventories": inventories,
-                "program_version": PROGRAM_NAME_WITH_FULL_VERSION,
+                "program_version": version_string(),
                 "program_repo_url": PROGRAM_REPO_URL,
                 "generated_at": built_at,
             },

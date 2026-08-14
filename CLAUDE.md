@@ -203,6 +203,12 @@ adding a field to the model in [`config.py`](src/ansibleinventorycmdb/config.py)
 
 The instance path defaults to `./instance`, overridable with `AIC_INSTANCE_PATH`.
 
+`AIC_COMMIT_SHA` is read by `constants.version_string()` for the footer. It is an environment variable rather
+than something read out of `.git`, because the two places the footer is actually seen — an installed wheel and
+the Worker bundle — are just the package's files, with no repo alongside. `npm run deploy` passes the sha as a
+wrangler `--var`, and `entry.py` copies that var into `os.environ` in `_build_and_upload`; a wrangler var only
+exists on `env`, which the runtime hands to a handler, so it can't be picked up at import time.
+
 ## Testing
 
 ```bash
