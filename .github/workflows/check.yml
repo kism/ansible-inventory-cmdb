@@ -21,6 +21,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+        with:
+          lfs: true
       - run: npm ci
       - name: Install Playwright's Chromium
         run: npx playwright install --with-deps chromium
