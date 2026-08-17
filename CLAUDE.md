@@ -10,7 +10,8 @@ uv sync                # Cloudflare Worker and static-site modes
 uv sync --extra server # ...plus the FastAPI web app
 npm install            # wrangler, pinned in package.json
 npm run fonts          # copies static/fonts from the @fontsource packages, see below
-scripts/build-token.sh set  # BUILD_TOKEN, needed before the Worker's on-demand build endpoint works
+ln -sf ../instance/config.yml src/config.yml  # both ends are gitignored; a fresh clone has neither
+scripts/build-token.sh set  # BUILD_TOKEN, needed before the Worker's /refresh endpoint works
 ```
 
 **Every Cloudflare command is an `npm run` script** in `package.json` — `login`, `bucket`, `dev`, `deploy`,
@@ -104,10 +105,12 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying) and
   absolute `ansibleinventorycmdb.*` imports it has.
 - Non-`.py` files need a `rules` entry in `wrangler.jsonc` or they are silently left out of the bundle — that's
   what carries the templates, CSS, fonts and `src/config.yml`.
-- **There is one config file, `instance/config.yml`.** `src/config.yml` is a tracked symlink to it — the Worker has
+- **There is one config file, `instance/config.yml`.** `src/config.yml` is a symlink to it — the Worker has
   no instance path at runtime, and wrangler can only bundle what's under `base_dir` (`src/`), so the symlink is how
-  the one file gets in. wrangler resolves it at bundle time. A clone with no `instance/config.yml` (the directory is
-  gitignored) has a dangling symlink and the deploy fails there — create the config first.
+  the one file gets in. wrangler resolves it at bundle time. **Both are gitignored**, the link included
+  (`.gitignore:180`), so a fresh clone has neither and `npm run dev`/`deploy` stop until you make them:
+  `ln -sf ../instance/config.yml src/config.yml`. Tracking the link would only invite an editor that replaced it
+  with a regular file to commit somebody's real config. The `check_worker` CI job creates both.
   wrangler drops a `rules` glob that matches nothing without a word, so the only symptom is `FileNotFoundError`
   on `/session/metadata/config.yml` at import. `npm run dev`/`npm run deploy` preflight it (`check-config` in
   `package.json`); bare `uv run pywrangler deploy` does not. The check also rejects a *regular* `src/config.yml`,

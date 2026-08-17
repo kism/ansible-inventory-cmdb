@@ -21,7 +21,8 @@ uv sync
 npm install
 npm run login
 npm run bucket                  # then enable public access on it in the dashboard
-$EDITOR instance/config.yml     # src/config.yml is a symlink to it
+$EDITOR instance/config.yml     # the one config file; both it and the symlink below are gitignored
+ln -sf ../instance/config.yml src/config.yml   # how it gets into the bundle, see below
 npm run deploy
 ./scripts/build-token.sh set      # the on-demand build endpoint, see below
 ./scripts/build-token.sh run      # seed the bucket now, rather than waiting for 14:00 UTC
