@@ -23,8 +23,8 @@ npm run login
 npm run bucket                  # then enable public access on it in the dashboard
 $EDITOR instance/config.yml     # src/config.yml is a symlink to it
 npm run deploy
-scripts/build-token.sh set      # the on-demand build endpoint, see below
-scripts/build-token.sh run      # seed the bucket now, rather than waiting for 14:00 UTC
+./scripts/build-token.sh set      # the on-demand build endpoint, see below
+./scripts/build-token.sh run      # seed the bucket now, rather than waiting for 14:00 UTC
 ```
 
 `npm run deploy` preflights that `src/config.yml` is a symlink that resolves — a missing or dangling link is
@@ -56,8 +56,8 @@ WORKER_URL="https://<your-worker>.workers.dev"
 
 ### Triggering it without a terminal
 
-**The Cloudflare dashboard cannot fire a cron trigger.** There is no "run now" button; *Settings → Trigger
-Events* only lists past runs. The one thing you can click is a URL, so the token is accepted as `?token=` as well
+**The Cloudflare dashboard cannot fire a cron trigger.** There is no "run now" button; _Settings → Trigger
+Events_ only lists past runs. The one thing you can click is a URL, so the token is accepted as `?token=` as well
 as a bearer header — `scripts/build-token.sh url` prints the whole thing to bookmark.
 
 The trade is that the token then sits in your browser history and Cloudflare's request logs. To avoid that, use
@@ -100,38 +100,13 @@ written as `<path>/index.html` and linked that way; bare `/` and `/inventory/x/`
 and 404.
 
 A **URL Rewrite** on the zone in front of the bucket fixes it — a rewrite rather than a redirect, so the address
-bar keeps the clean path. It cannot live in `wrangler.jsonc`: the Worker only *writes* objects on its cron
+bar keeps the clean path. It cannot live in `wrangler.jsonc`: the Worker only _writes_ objects on its cron
 trigger, and requests to the bucket's domain go straight to R2 without reaching it. Being zone config, it does
 **not** travel with `npm run deploy`; a new bucket or domain needs it again.
 
-In the dashboard, **Rules → Overview → Create rule → URL Rewrite Rule**, leaving *Query* alone:
+In the dashboard, **Rules → Overview → Create rule → URL Rewrite Rule**, leaving _Query_ alone:
 
-| Field                    | Value                                                                     |
-| ------------------------ | ------------------------------------------------------------------------- |
+| Field                    | Value                                                                      |
+| ------------------------ | -------------------------------------------------------------------------- |
 | Custom filter expression | `(http.host eq "<your-domain>" and ends_with(http.request.uri.path, "/"))` |
-| Path → Rewrite to        | **Dynamic**, `concat(http.request.uri.path, "index.html")`                |
-
-Or through the API — noting that this `PUT` **replaces every rule in the zone's `http_request_transform`
-phase**, so if the zone has other URL rewrites, use the dashboard, or `GET` the entrypoint first and re-`PUT`
-them alongside this one:
-
-```bash
-curl "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/rulesets/phases/http_request_transform/entrypoint" \
-  --request PUT \
-  --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-  --json '{
-    "rules": [{
-      "expression": "(http.host eq \"<your-domain>\" and ends_with(http.request.uri.path, \"/\"))",
-      "description": "CMDB bucket: serve index.html for directory paths",
-      "action": "rewrite",
-      "action_parameters": {
-        "uri": { "path": { "expression": "concat(http.request.uri.path, \"index.html\")" } }
-      }
-    }]
-  }'
-```
-
-Matching on a trailing slash is deliberate: a path with neither a slash nor an extension —
-`/inventory/kism_main` — still 404s, and catching those would mean rewriting every extensionless path, which
-starts guessing at things like `/static/`. Nothing links that way. Check the result with `curl -sI`; a rewrite
-returns `200` with **no** `location:` header, where a redirect would return `301`.
+| Path → Rewrite to        | **Dynamic**, `concat(http.request.uri.path, "index.html")`                 |
