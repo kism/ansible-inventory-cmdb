@@ -15,3 +15,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/ruff-action@v3
+
+  check_fonts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - run: npm ci
+      - name: Install Playwright's Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Check the fonts zy.css declares load in a real browser
+        run: npm run check_fonts

@@ -61,7 +61,10 @@ The `.woff2` files under `static/fonts/` are checked in, but generated: `npm run
 ([`scripts/fetch-fonts.sh`](scripts/fetch-fonts.sh)) copies the latin, non-variable weights `zy.css`'s `@font-face`
 rules reference out of the `@fontsource/fira-code`/`@fontsource/noto-sans-display` devDependencies, under the
 existing filenames. Re-run it after bumping either package or adding a weight to `zy.css`; don't hand-edit the
-`.woff2` files.
+`.woff2` files. `npm run check_fonts` ([`scripts/check_fonts.mjs`](scripts/check_fonts.mjs), also a CI job) is what
+catches forgetting to: it serves the package directory over `python -m http.server`, loads `zy.css` in headless
+chromium and fails if any `@font-face` rule the sheet declares doesn't load. It reads the rules off the stylesheet
+rather than a hardcoded list, so adding a weight needs no change here.
 
 `requires-python` is `>=3.13`, not 3.14, because the Worker runs on Pyodide. On 3.13 annotations are evaluated at
 definition time, so any module with a `TYPE_CHECKING`-only import used in a signature needs
