@@ -52,7 +52,7 @@ url)
 	# print a broken URL after the error. A failing assignment trips set -e.
 	url=$(need WORKER_URL "$URL_HINT")
 	token=$(need BUILD_TOKEN "$TOKEN_HINT")
-	echo "$url/?token=$token"
+	echo "$url/refresh?token=$token"
 	;;
 
 run)
@@ -63,7 +63,7 @@ run)
 	curl -sS -X POST --max-time 300 \
 		-H "Authorization: Bearer $token" \
 		-w '\n[HTTP %{http_code}]\n' \
-		"$url"
+		"$url/refresh"
 	;;
 
 *)

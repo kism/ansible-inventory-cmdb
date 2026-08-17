@@ -34,6 +34,7 @@ the Worker can't run belongs in the `server` extra. See *Dependency layout* belo
 | Render the static site  | `uv run ansibleinventorycmdb-generate <output dir>`                    |
 | Dev server              | `uv run uvicorn ansibleinventorycmdb:create_app --factory --port 5100` |
 | Worker dev / deploy     | `npm run dev` / `npm run deploy` (from the repo root)                  |
+| Check the Worker boots  | `npm run check_worker` (from the repo root)                            |
 
 ## Architecture
 
@@ -124,12 +125,20 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying) and
   be fired on demand — `wrangler dev --remote` returns error 1042 rather than dispatching one — which is why
   `entry.py` has a `fetch` handler as well. Both handlers call `_build_and_upload`; keep it that way so the
   ad-hoc path can't drift from the scheduled one.
-- The `fetch` handler is guarded by the `BUILD_TOKEN` secret and **fails closed** — no token configured means every
-  request 404s. Don't relax this: the `workers.dev` URL is public and each build pulls a whole repo down from
+- The `fetch` handler serves exactly two paths, `/refresh` (build) and `/status`; anything else gets the same 404
+  as a bad token. `/refresh` is guarded by the `BUILD_TOKEN` secret and **fails closed** — no token configured means
+  every request 404s. Don't relax this: the `workers.dev` URL is public and each build pulls a whole repo down from
   whoever hosts the inventory. It returns 404 rather than 403 so it doesn't advertise itself. The token is taken from
   either the `Authorization` header or `?token=`, because the dashboard has no way to fire a cron trigger or set a
   header — a bookmarkable URL is the only trigger a browser can offer. Compare as `bytes`:
   `hmac.compare_digest` raises `TypeError` on non-ASCII `str`, which would turn a junk token into a 500.
+- `/status` is the one path in front of that guard, and it is the only handler that touches the R2 binding. It
+  **stores nothing**: it heads `index.html`, which every build rewrites, so its upload time is the last successful
+  run — a failed build writes nothing and shows up as a growing `age_seconds`. Don't add a status object written
+  per run to record failures too; it answers the same question with state that can go stale. Unauthenticated
+  because the bucket is public, and 503 past `STALE_AFTER_SECONDS` so a dumb uptime monitor works. The binding
+  returns `uploaded` as a **naive** `datetime` in UTC — `.replace(tzinfo=UTC)`, or subtracting from `now(UTC)`
+  raises.
 - wrangler is pinned in `package.json`, not installed globally — run `npm install` at the repo root once.
   `pywrangler` shells out to `npx wrangler`, which prefers the local copy. Bumping it may require bumping
   `compatibility_date` too.
@@ -141,7 +150,12 @@ extras and dependency-groups are invisible to it — and compiles that list agai
 `--no-build`. So that list is exactly "what the Worker installs", and it is load-bearing:
 
 - `[project.dependencies]`: `httpx`, `jinja2`, `pydantic`, `pyyaml`. All four have Pyodide wheels. Adding something
-  here without a Pyodide wheel breaks `npm run dev`/`deploy` at the resolve step, not at runtime.
+  here without a Pyodide wheel breaks `npm run dev`/`deploy` at the resolve step, not at runtime. So does raising
+  a floor past what the index serves — `pydantic>=2.11` did exactly that, the index has 2.10.6.
+  `npm run check_worker` ([`scripts/check-worker.sh`](scripts/check-worker.sh), also a CI job) is what catches
+  both: it starts `npm run dev` — which resolves the list, then boots the bundle in workerd — and fails unless an
+  untokened `/refresh` comes back 404 and `/status` returns its JSON. Nothing in pytest runs a line of this
+  under Pyodide.
 - `[project.optional-dependencies].server`: `fastapi`, `uvicorn`. `uv sync --extra server`. The `test`
   dependency-group pulls it in as `ansibleinventorycmdb[server]`, so `uv sync` for development still gets it.
 - `[dependency-groups].worker`: `workers-py`, `workers-runtime-sdk`. In `default-groups`, so `uv run pywrangler`

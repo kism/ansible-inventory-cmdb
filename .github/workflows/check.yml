@@ -1,5 +1,5 @@
 ---
-name: Check (Ruff, Fonts)
+name: Check (Ruff, Fonts, Worker)
 
 on:
   push:
@@ -28,3 +28,17 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Check the fonts zy.css declares load in a real browser
         run: npm run check_fonts
+
+  check_worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - run: npm ci
+      # instance/ is gitignored, so src/config.yml is a dangling symlink on a fresh clone and the bundle
+      # would come up with no config at all. The test config is only parsed here, never fetched from.
+      - name: Give the bundle a config to import
+        run: mkdir -p instance && cp tests/configs/valid.yml instance/config.yml
+      - name: Boot the Worker under Pyodide
+        run: npm run check_worker

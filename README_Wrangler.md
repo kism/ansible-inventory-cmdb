@@ -35,8 +35,8 @@ bundled as nothing at all, and the Worker then dies on import with
 
 The cron trigger fires daily at 14:00 UTC. **Nothing else fires it**: deploying doesn't, and a deployed cron
 trigger cannot be dispatched by hand — `wrangler dev --remote` returns error 1042 rather than sending one. That
-is why the Worker also has a token-guarded `fetch` handler, and why a fresh deploy leaves the bucket 404ing until
-you use it.
+is why the Worker also answers `POST /refresh`, token-guarded, and why a fresh deploy leaves the bucket 404ing
+until you use it.
 
 [`scripts/build-token.sh`](scripts/build-token.sh) is that endpoint's front end:
 
@@ -66,13 +66,25 @@ the header form, or put the Worker on a custom domain behind
 
 The guard itself is not optional. The `workers.dev` URL is public and each build costs ~75 requests against
 whatever hosts your inventory, so an open endpoint is a free way for anyone to hammer that server. It **fails
-closed** — no `BUILD_TOKEN`, no way in — and a wrong token gets a 404 rather than a 403, so it doesn't advertise
-itself.
+closed** — no `BUILD_TOKEN`, no way in — and a wrong token gets a 404 rather than a 403, the same answer as any
+path that isn't `/refresh` or `/status`, so nothing advertises itself.
 
 ## Checking the last run
 
-`npm run tail` only streams what happens while you're attached; wrangler has no historical log query. To find out
-when the site was last rebuilt, ask the site — every run rewrites every page:
+`npm run tail` only streams what happens while you're attached; wrangler has no historical log query. The Worker
+answers `/status` instead — no token needed, it only reports what a public bucket already shows:
+
+```bash
+curl https://<worker>.workers.dev/status
+{"ok": true, "last_build": "2026-08-17T01:50:40.144000+00:00", "age_seconds": 1, "stale_after_seconds": 93600}
+```
+
+It reads the upload time of `index.html`, which every run rewrites, so there is nothing to keep in sync and one
+Cloudflare-internal request to answer with. A failed run writes nothing, so it shows up as an age that keeps
+climbing rather than as an error message. Past 26 hours — a daily cron plus slack — `ok` goes false and the
+status code is **503**, so an uptime monitor can watch the URL without parsing anything.
+
+Same answer straight from the site, if you'd rather not involve the Worker:
 
 ```bash
 curl -sI https://<your-domain>/index.html | grep -i last-modified

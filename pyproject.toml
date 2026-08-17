@@ -12,7 +12,9 @@ requires-python = ">=3.13"                                                    # 
 dependencies = [
     "httpx>=0.28.1",    # Pyodide's build is patched to use fetch(); aiohttp has no usable wasm wheel at all
     "jinja2>=3.1.6",    # Not pulled in by fastapi, needed for Jinja2Templates
-    "pydantic>=2.11.0", # Used directly by config.py and logger.py, not just via fastapi
+    # Used directly by config.py and logger.py, not just via fastapi. The floor is what the Pyodide index
+    # serves (2.10.6) — raising it makes `pywrangler sync` unresolvable, which npm run check_worker catches.
+    "pydantic>=2.10.6",
     "pyyaml>=6.0.2",
 ]
 

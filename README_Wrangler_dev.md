@@ -14,6 +14,12 @@ curl http://localhost:8787/cdn-cgi/handler/scheduled   # cron triggers don't fir
 or dangling link is bundled as nothing at all, and the Worker then dies on import with
 `FileNotFoundError: /session/metadata/config.yml`. Calling `pywrangler` directly skips that check.
 
+`npm run check_worker` is the same thing without the babysitting: it starts the dev server, waits for an
+untokened `/refresh` to answer 404 and for `/status` to return its JSON, then shuts it down. That covers the two ways the
+Worker breaks without pytest noticing — a dependency that won't resolve against the Pyodide index, and a bundle
+that won't import under wasm — so it runs in CI and in
+[`scripts/run-ci-local.sh`](scripts/run-ci-local.sh).
+
 The R2 binding is local by default, so a dev build writes to a simulated bucket and touches nothing real. To aim
 [`scripts/build-token.sh`](scripts/build-token.sh) at the dev server, override `WORKER_URL` — the environment
 wins over `.dev.vars`:
