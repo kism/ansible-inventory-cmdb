@@ -20,7 +20,7 @@ dependencies = [
 
 # The web app, which neither the Worker nor `ansibleinventorycmdb-generate` needs: uv sync --extra server
 [project.optional-dependencies]
-server = ["fastapi>=0.115.0", "uvicorn[standard]>=0.52.1"]
+server = ["fastapi>=0.115.0", "uvicorn[standard]>=0.52.3"]
 
 [project.urls]
 Repository = "https://github.com/kism/ansible-inventory-cmdb"
