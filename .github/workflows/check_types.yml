@@ -1,5 +1,5 @@
 ---
-name: Type Check (ty)
+name: Type Check
 
 on:
   push:
