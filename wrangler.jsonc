@@ -32,7 +32,7 @@
 			"fallthrough": true
 		}
 	],
-	// The commit the bundle was built from, shown in the page footer. Empty here on purpose: `npm run deploy`
+	// The commit the bundle was built from, shown in the page footer. Empty here on purpose: `bun run deploy`
 	// overrides it with `--var COMMIT_SHA:$(git rev-parse --short HEAD)`, so a `pywrangler deploy` run by hand
 	// just gets no sha rather than a stale one.
 	"vars": {

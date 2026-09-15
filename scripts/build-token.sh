@@ -44,7 +44,7 @@ set)
 
 	# Piped, so the token never becomes a command-line argument in anyone's shell history or process list.
 	worker=$(grep -m1 '"name":' wrangler.jsonc | sed 's/.*: *"\(.*\)".*/\1/')
-	printf '%s' "$token" | npx wrangler secret put BUILD_TOKEN --name "$worker"
+	printf '%s' "$token" | bunx wrangler secret put BUILD_TOKEN --name "$worker"
 	;;
 
 url)

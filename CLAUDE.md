@@ -8,16 +8,21 @@ Presents Ansible inventories as a CMDB (Configuration Management Database) webpa
 ```bash
 uv sync                # Cloudflare Worker and static-site modes
 uv sync --extra server # ...plus the FastAPI web app
-npm install            # wrangler, pinned in package.json
-npm run fonts          # copies static/fonts from the @fontsource packages, see below
+bun install            # wrangler, pinned in package.json
+bun run fonts          # copies static/fonts from the @fontsource packages, see below
 ln -sf ../instance/config.yml src/config.yml  # both ends are gitignored; a fresh clone has neither
 scripts/build-token.sh set  # BUILD_TOKEN, needed before the Worker's /refresh endpoint works
 ```
 
-**Every Cloudflare command is an `npm run` script** in `package.json` — `login`, `bucket`, `dev`, `deploy`,
-`tail`. `npx wrangler` and `uv run pywrangler` are what those scripts call; don't put them in docs or suggest
+**Every Cloudflare command is a `bun run` script** in `package.json` — `login`, `bucket`, `dev`, `deploy`,
+`tail`. `bunx wrangler` and `uv run pywrangler` are what those scripts call; don't put them in docs or suggest
 them to the user. `pywrangler` proxies any subcommand it doesn't handle straight to `npx wrangler`, and syncs
-`python_modules` first for `dev`/`deploy` — the reason those two don't go through `npx` directly.
+`python_modules` first for `dev`/`deploy` — the reason those two don't go through `bunx` directly.
+
+**bun is the only package manager.** `bun.lock` is the lockfile; there is no `package-lock.json`, and CI installs
+with `bun install --frozen-lockfile`, so bumping with npm leaves the two out of sync and fails the build. The one
+place npm tooling survives is inside pywrangler, which hard-codes `npx --yes wrangler` — node has to be on PATH for
+`dev`/`deploy`, but `npx` resolves the bun-installed `node_modules/.bin/wrangler`, so bun still owns the version.
 
 One `pyproject.toml` covers all three modes. **`[project.dependencies]` is the Worker's install list** — pywrangler
 reads it and nothing else (no extras, no dependency-groups) and resolves it against the Pyodide index, so anything
@@ -34,8 +39,8 @@ the Worker can't run belongs in the `server` extra. See *Dependency layout* belo
 | Type check              | `uv run ty check` and `uv run pyright`                                 |
 | Render the static site  | `uv run ansibleinventorycmdb-generate <output dir>`                    |
 | Dev server              | `uv run uvicorn ansibleinventorycmdb:create_app --factory --port 5100` |
-| Worker dev / deploy     | `npm run dev` / `npm run deploy` (from the repo root)                  |
-| Check the Worker boots  | `npm run check_worker` (from the repo root)                            |
+| Worker dev / deploy     | `bun run dev` / `bun run deploy` (from the repo root)                  |
+| Check the Worker boots  | `bun run check_worker` (from the repo root)                            |
 
 ## Architecture
 
@@ -59,11 +64,11 @@ paths resolve the inheritance off the same `FileSystemLoader`, so it needs no co
 assets (CSS, JS, fonts, favicon) are in
 [`src/ansibleinventorycmdb/static/`](src/ansibleinventorycmdb/static/), mounted at `/static`.
 
-The `.woff2` files under `static/fonts/` are checked in, but generated: `npm run fonts`
+The `.woff2` files under `static/fonts/` are checked in, but generated: `bun run fonts`
 ([`scripts/fetch-fonts.sh`](scripts/fetch-fonts.sh)) copies the latin, non-variable weights `zy.css`'s `@font-face`
 rules reference out of the `@fontsource/fira-code`/`@fontsource/noto-sans-display` devDependencies, under the
 existing filenames. Re-run it after bumping either package or adding a weight to `zy.css`; don't hand-edit the
-`.woff2` files. `npm run check_fonts` ([`scripts/check_fonts.mjs`](scripts/check_fonts.mjs), also a CI job) is what
+`.woff2` files. `bun run check_fonts` ([`scripts/check_fonts.mjs`](scripts/check_fonts.mjs), also a CI job) is what
 catches forgetting to: it serves the package directory over `python -m http.server`, loads `zy.css` in headless
 chromium and fails if any `@font-face` rule the sheet declares doesn't load. It reads the rules off the stylesheet
 rather than a hardcoded list, so adding a weight needs no change here.
@@ -108,18 +113,18 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying) and
 - **There is one config file, `instance/config.yml`.** `src/config.yml` is a symlink to it — the Worker has
   no instance path at runtime, and wrangler can only bundle what's under `base_dir` (`src/`), so the symlink is how
   the one file gets in. wrangler resolves it at bundle time. **Both are gitignored**, the link included
-  (`.gitignore:180`), so a fresh clone has neither and `npm run dev`/`deploy` stop until you make them:
+  (`.gitignore:180`), so a fresh clone has neither and `bun run dev`/`deploy` stop until you make them:
   `ln -sf ../instance/config.yml src/config.yml`. Tracking the link would only invite an editor that replaced it
   with a regular file to commit somebody's real config. The `check_worker` CI job creates both.
   wrangler drops a `rules` glob that matches nothing without a word, so the only symptom is `FileNotFoundError`
-  on `/session/metadata/config.yml` at import. `npm run dev`/`npm run deploy` preflight it (`check-config` in
+  on `/session/metadata/config.yml` at import. `bun run dev`/`bun run deploy` preflight it (`check-config` in
   `package.json`); bare `uv run pywrangler deploy` does not. The check also rejects a *regular* `src/config.yml`,
   which editors have recreated when the link's target went missing — that's the two-configs bug coming back.
 - Three imports are deferred so the Worker doesn't have to install what it never uses, or can't:
   `create_app`/FastAPI in `__init__.py`, `httpx` in `cmdb.httpx_fetcher`, and `pwd` in `config._write_config`
   (Pyodide has no `pwd`).
 - **`compatibility_date` has two independent ceilings, and the second one is not obvious.** Newer than the workerd
-  binary wrangler ships with and `npm run dev` won't start. **2026-08-05 or later and the deploy is rejected**
+  binary wrangler ships with and `bun run dev` won't start. **2026-08-05 or later and the deploy is rejected**
   with `Dynamic require of "fs" is not supported` from `loadPyodide` — Pyodide fails to boot in Cloudflare's
   deploy-time validation. That reproduces on a zero-dependency hello-world Worker, so it is a platform bug, not
   anything in this repo; don't go looking in `entry.py` for it. Pinned to `2026-08-01`, the newest date that
@@ -142,8 +147,8 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying) and
   because the bucket is public, and 503 past `STALE_AFTER_SECONDS` so a dumb uptime monitor works. The binding
   returns `uploaded` as a **naive** `datetime` in UTC — `.replace(tzinfo=UTC)`, or subtracting from `now(UTC)`
   raises.
-- wrangler is pinned in `package.json`, not installed globally — run `npm install` at the repo root once.
-  `pywrangler` shells out to `npx wrangler`, which prefers the local copy. Bumping it may require bumping
+- wrangler is pinned in `package.json`, not installed globally — run `bun install` at the repo root once.
+  `pywrangler` shells out to `npx wrangler`, which prefers the bun-installed local copy. Bumping it may require bumping
   `compatibility_date` too.
 
 ### Dependency layout
@@ -153,10 +158,10 @@ extras and dependency-groups are invisible to it — and compiles that list agai
 `--no-build`. So that list is exactly "what the Worker installs", and it is load-bearing:
 
 - `[project.dependencies]`: `httpx`, `jinja2`, `pydantic`, `pyyaml`. All four have Pyodide wheels. Adding something
-  here without a Pyodide wheel breaks `npm run dev`/`deploy` at the resolve step, not at runtime. So does raising
+  here without a Pyodide wheel breaks `bun run dev`/`deploy` at the resolve step, not at runtime. So does raising
   a floor past what the index serves — `pydantic>=2.11` did exactly that, the index has 2.10.6.
-  `npm run check_worker` ([`scripts/check-worker.sh`](scripts/check-worker.sh), also a CI job) is what catches
-  both: it starts `npm run dev` — which resolves the list, then boots the bundle in workerd — and fails unless an
+  `bun run check_worker` ([`scripts/check-worker.sh`](scripts/check-worker.sh), also a CI job) is what catches
+  both: it starts `bun run dev` — which resolves the list, then boots the bundle in workerd — and fails unless an
   untokened `/refresh` comes back 404 and `/status` returns its JSON. Nothing in pytest runs a line of this
   under Pyodide.
 - `[project.optional-dependencies].server`: `fastapi`, `uvicorn`. `uv sync --extra server`. The `test`
@@ -228,7 +233,7 @@ The instance path defaults to `./instance`, overridable with `AIC_INSTANCE_PATH`
 
 `AIC_COMMIT_SHA` is read by `constants.version_string()` for the footer. It is an environment variable rather
 than something read out of `.git`, because the two places the footer is actually seen — an installed wheel and
-the Worker bundle — are just the package's files, with no repo alongside. `npm run deploy` passes the sha as a
+the Worker bundle — are just the package's files, with no repo alongside. `bun run deploy` passes the sha as a
 wrangler `--var`, and `entry.py` copies that var into `os.environ` in `_build_and_upload`; a wrangler var only
 exists on `env`, which the runtime hands to a handler, so it can't be picked up at import time.
 

@@ -45,7 +45,7 @@ There is also a console script, `ansibleinventorycmdb`, which serves on `AIC_HOS
 `AIC_PORT` (default `5100`).
 
 Set `AIC_COMMIT_SHA` to have the page footer name the commit the deployment was built from — there is no `.git`
-to read one out of once the package is installed. `npm run deploy` does the equivalent for the Cloudflare Worker,
+to read one out of once the package is installed. `bun run deploy` does the equivalent for the Cloudflare Worker,
 passing `--var COMMIT_SHA:$(git rev-parse --short HEAD)`.
 
 ### Run without a server
