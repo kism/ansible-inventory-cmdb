@@ -2,7 +2,7 @@
 # Boots the Worker for real and checks it answers, which is the only way to find out whether the thing
 # runs under Pyodide/wasm — nothing in pytest touches that path.
 #
-# `bun run dev` does two checks in one: pywrangler sync resolves [project.dependencies] against the Pyodide
+# `npm run dev` does two checks in one: pywrangler sync resolves [project.dependencies] against the Pyodide
 # index (a dependency with no wasm wheel fails here), then workerd boots the bundle, which runs entry.py's
 # module-level config parse and every import. 404 is the right answer to an untokened /refresh, so it means the
 # whole chain came up. Anything else, or nothing at all, is a failure.
@@ -10,9 +10,9 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 LOG=$(mktemp)
-# setsid so the pgid is DEV_PID: `bun run dev` is bun -> uv -> npx -> workerd, and killing only the top
+# setsid so the pgid is DEV_PID: `npm run dev` is npm -> uv -> npx -> workerd, and killing only the top
 # of that chain leaves workerd holding the port.
-setsid bun run dev >"$LOG" 2>&1 &
+setsid npm run dev >"$LOG" 2>&1 &
 DEV_PID=$!
 trap 'kill -- -$DEV_PID 2>/dev/null || true' EXIT
 

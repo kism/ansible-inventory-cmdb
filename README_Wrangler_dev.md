@@ -6,15 +6,15 @@ Local development, project layout and the sharp edges you only hit while changin
 ## Run it locally
 
 ```bash
-bun run dev
+npm run dev
 curl http://localhost:8787/cdn-cgi/handler/scheduled   # cron triggers don't fire in dev
 ```
 
-`bun run dev` preflights that `src/config.yml` is a symlink that resolves, the same as `deploy` does — a missing
+`npm run dev` preflights that `src/config.yml` is a symlink that resolves, the same as `deploy` does — a missing
 or dangling link is bundled as nothing at all, and the Worker then dies on import with
 `FileNotFoundError: /session/metadata/config.yml`. Calling `pywrangler` directly skips that check.
 
-`bun run check_worker` is the same thing without the babysitting: it starts the dev server, waits for an
+`npm run check_worker` is the same thing without the babysitting: it starts the dev server, waits for an
 untokened `/refresh` to answer 404 and for `/status` to return its JSON, then shuts it down. That covers the two ways the
 Worker breaks without pytest noticing — a dependency that won't resolve against the Pyodide index, and a bundle
 that won't import under wasm — so it runs in CI and in
@@ -51,7 +51,7 @@ newest date that deploys; re-test the boundary before raising it.
 | `src/config.yml`                   | Symlink to `instance/config.yml`, bundled with the Worker       |
 | [`wrangler.jsonc`](wrangler.jsonc) | Cron schedule, R2 binding, module rules                         |
 | [`pyproject.toml`](pyproject.toml) | One project for all three run modes, see below                  |
-| [`package.json`](package.json)     | Pins wrangler, and defines every `bun run` script               |
+| [`package.json`](package.json)     | Pins wrangler, and defines every `npm run` script               |
 
 `src/entry.py` sits beside `src/ansibleinventorycmdb/` on purpose. wrangler bundles everything under the
 entrypoint's directory, so the package ships at the same path the entrypoint imports it from, with no copying,
@@ -68,7 +68,7 @@ it — and resolves that list against the Pyodide package index with `--no-build
 | `[project.optional-dependencies].server` | fastapi, uvicorn                | `uv sync --extra server`    |
 | `[dependency-groups].worker`             | workers-py, workers-runtime-sdk | `uv sync` (a default group) |
 
-Anything you add to the first row must have a Pyodide wheel, or `bun run dev`/`deploy` fails at the resolve step.
+Anything you add to the first row must have a Pyodide wheel, or `npm run dev`/`deploy` fails at the resolve step.
 Notably **aiohttp does not**: recent versions have no wasm wheel at all, and older ones resolve to the
 socket-based build, which dies under Pyodide with `RuntimeError("SSL is not supported.")`. Pyodide ships its own
 patched `httpx` that goes through the JS `fetch` API, which is why that's the client here.

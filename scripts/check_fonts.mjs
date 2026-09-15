@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Loads every @font-face rule in zy.css in a real browser, so a woff2 that is missing,
 // corrupt, or never regenerated after a weight was added to zy.css fails the build.
-// Usage: bun run check_fonts   (needs: bunx playwright install --with-deps chromium)
+// Usage: npm run check_fonts   (needs: npx playwright install --with-deps chromium)
 
 import { spawn } from "node:child_process";
 import { chromium } from "playwright";

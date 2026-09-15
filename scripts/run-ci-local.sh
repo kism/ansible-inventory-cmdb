@@ -21,4 +21,4 @@ print_heading "PyTest"
 pytest -q --tb=short
 
 print_heading "Worker (Pyodide)"
-bun run --silent check_worker
+npm run --silent check_worker

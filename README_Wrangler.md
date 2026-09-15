@@ -12,23 +12,24 @@ times two paths), over the free plan's cap of 50.
 
 ## Deploy
 
-Every Cloudflare command is a `bun run` script in [`package.json`](package.json), so there is nothing to install
+Every Cloudflare command is an `npm run` script in [`package.json`](package.json), so there is nothing to install
 globally and nothing to remember about flags. Run them from the repo root — there is one `pyproject.toml`, and
 pywrangler insists on finding `wrangler.jsonc` beside it.
 
 ```bash
 uv sync
-bun install
-bun run login
-bun run bucket                  # then enable public access on it in the dashboard
+nvm install                     # node 26, from .nvmrc
+npm install
+npm run login
+npm run bucket                  # then enable public access on it in the dashboard
 $EDITOR instance/config.yml     # the one config file; both it and the symlink below are gitignored
 ln -sf ../instance/config.yml src/config.yml   # how it gets into the bundle, see below
-bun run deploy
+npm run deploy
 ./scripts/build-token.sh set      # the on-demand build endpoint, see below
 ./scripts/build-token.sh run      # seed the bucket now, rather than waiting for 14:00 UTC
 ```
 
-`bun run deploy` preflights that `src/config.yml` is a symlink that resolves — a missing or dangling link is
+`npm run deploy` preflights that `src/config.yml` is a symlink that resolves — a missing or dangling link is
 bundled as nothing at all, and the Worker then dies on import with
 `FileNotFoundError: /session/metadata/config.yml`. Calling `pywrangler` directly skips that check.
 
@@ -72,7 +73,7 @@ path that isn't `/refresh` or `/status`, so nothing advertises itself.
 
 ## Checking the last run
 
-`bun run tail` only streams what happens while you're attached; wrangler has no historical log query. The Worker
+`npm run tail` only streams what happens while you're attached; wrangler has no historical log query. The Worker
 answers `/status` instead — no token needed, it only reports what a public bucket already shows:
 
 ```bash
@@ -103,7 +104,7 @@ and 404.
 A **URL Rewrite** on the zone in front of the bucket fixes it — a rewrite rather than a redirect, so the address
 bar keeps the clean path. It cannot live in `wrangler.jsonc`: the Worker only _writes_ objects on its cron
 trigger, and requests to the bucket's domain go straight to R2 without reaching it. Being zone config, it does
-**not** travel with `bun run deploy`; a new bucket or domain needs it again.
+**not** travel with `npm run deploy`; a new bucket or domain needs it again.
 
 In the dashboard, **Rules → Overview → Create rule → URL Rewrite Rule**, leaving _Query_ alone:
 
