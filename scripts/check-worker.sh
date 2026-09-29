@@ -10,9 +10,11 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 LOG=$(mktemp)
-# setsid so the pgid is DEV_PID: `npm run dev` is npm -> uv -> npx -> workerd, and killing only the top
-# of that chain leaves workerd holding the port.
-setsid npm run dev >"$LOG" 2>&1 &
+# Run it in its own process group so the pgid is DEV_PID: `npm run dev` is npm -> uv -> npx -> workerd, and
+# killing only the top of that chain leaves workerd holding the port. macOS has no setsid; perl does the same
+# thing in one line and ships with the OS.
+if command -v setsid >/dev/null; then SETPGRP=(setsid); else SETPGRP=(perl -e 'setpgrp(0,0); exec @ARGV'); fi
+"${SETPGRP[@]}" npm run dev >"$LOG" 2>&1 &
 DEV_PID=$!
 trap 'kill -- -$DEV_PID 2>/dev/null || true' EXIT
 

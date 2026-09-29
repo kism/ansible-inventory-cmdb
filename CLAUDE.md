@@ -69,8 +69,8 @@ present and starts with the `wOF2` magic number. It reads the paths off the styl
 list, so adding a weight needs no change here. This used to load the sheet in headless chromium via playwright;
 don't bring that back for what four lines of shell cover.
 
-`requires-python` is `>=3.13`, not 3.14, because the Worker runs on Pyodide. On 3.13 annotations are evaluated at
-definition time, so any module with a `TYPE_CHECKING`-only import used in a signature needs
+`requires-python` is `>=3.13`, a floor below the 3.14 the Worker's Pyodide now runs. On 3.13 annotations are
+evaluated at definition time, so any module with a `TYPE_CHECKING`-only import used in a signature needs
 `from __future__ import annotations`. Ruff's `TC004` catches this — do not silence it.
 
 ### Static site / Cloudflare Worker mode
@@ -124,12 +124,15 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying) and
   `ansibleinventorycmdb:create_app`; there was a PEP 562 `__getattr__` shim faking the short form, don't bring it
   back. `httpx` is imported inside `cmdb.httpx_fetcher`, and `pwd` inside `config._write_config` (no `pwd` in
   Pyodide).
-- **`compatibility_date` has two independent ceilings, and the second one is not obvious.** Newer than the workerd
-  binary wrangler ships with and `npm run dev` won't start. **2026-08-05 or later and the deploy is rejected**
-  with `Dynamic require of "fs" is not supported` from `loadPyodide` — Pyodide fails to boot in Cloudflare's
-  deploy-time validation. That reproduces on a zero-dependency hello-world Worker, so it is a platform bug, not
-  anything in this repo; don't go looking in `entry.py` for it. Pinned to `2026-08-01`, the newest date that
-  deploys. Re-bisect before raising it.
+- **`compatibility_date` selects the edge's Python runtime, and it has a floor as well as a ceiling.**
+  pywrangler's `metadata.py` maps the date to a version: **2026-09-08 or later is Python 3.14**, anything older
+  is 3.13. The 3.13 edge runtime does not put the bundled `python_modules` on `sys.path`, so the deploy is
+  rejected with `ModuleNotFoundError` on the *first* vendored import (`import yaml`, in `entry.py`) while
+  `npm run dev` boots the same bundle happily — workerd locally is fine with it. That is what the stale
+  `2026-08-01` pin here caused; don't lower it back. The ceiling is still the workerd binary wrangler ships
+  with: newer than that and `npm run dev` won't start. The date also picks the Pyodide index the wheels come
+  from, so after changing it delete `pylock.toml` (it pins the old ones), run `uv run pywrangler sync --force`,
+  and re-run `npm run check_worker`.
 - Trigger a local run with `curl http://localhost:8787/cdn-cgi/handler/scheduled`. A *deployed* cron trigger can't
   be fired on demand — `wrangler dev --remote` returns error 1042 rather than dispatching one — which is why
   `entry.py` has a `fetch` handler as well. Both handlers call `_build_and_upload`; keep it that way so the
@@ -160,7 +163,8 @@ extras and dependency-groups are invisible to it — and compiles that list agai
 
 - `[project.dependencies]`: `httpx`, `jinja2`, `pydantic`, `pyyaml`. All four have Pyodide wheels. Adding something
   here without a Pyodide wheel breaks `npm run dev`/`deploy` at the resolve step, not at runtime. So does raising
-  a floor past what the index serves — `pydantic>=2.11` did exactly that, the index has 2.10.6.
+  a floor past what the index for the current `compatibility_date` serves — `pydantic>=2.11` did exactly that
+  back when the 3.13 index stopped at 2.10.6; the 3.14 index serves 2.12.5.
   `npm run check_worker` ([`scripts/check-worker.sh`](scripts/check-worker.sh), also a CI job) is what catches
   both: it starts `npm run dev` — which resolves the list, then boots the bundle in workerd — and fails unless an
   untokened `/refresh` comes back 404 and `/status` returns its JSON. Nothing in pytest runs a line of this

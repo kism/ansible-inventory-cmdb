@@ -5,15 +5,16 @@ description = "Generates a CMDB webpage from an ansible git repository"
 authors = [{ name = "Kieran Gee", email = "kieran.lost.the.game@gmail.com" }]
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.13"                                                    # 3.13 is what Pyodide runs, see wrangler.jsonc
+requires-python = ">=3.13"                                                    # floor kept below what Pyodide runs, see wrangler.jsonc
 
 # pywrangler reads *only* this list and installs it into the Worker, so everything here must have a Pyodide wheel
 # and everything the Worker can't use belongs in an extra below. See README_Wrangler_dev.md.
 dependencies = [
     "httpx>=0.28.1",    # Pyodide's build is patched to use fetch(); aiohttp has no usable wasm wheel at all
     "jinja2>=3.1.6",    # Not pulled in by fastapi, needed for Jinja2Templates
-    # Used directly by config.py and logger.py, not just via fastapi. The floor is what the Pyodide index
-    # serves (2.10.6) — raising it makes `pywrangler sync` unresolvable, which npm run check_worker catches.
+    # Used directly by config.py and logger.py, not just via fastapi. The floor has to stay at or below what
+    # the Pyodide index for wrangler.jsonc's compatibility_date serves, or `pywrangler sync` can't resolve it —
+    # npm run check_worker catches that. The 3.13 index stopped at 2.10.6; the 3.14 one serves 2.12.5.
     "pydantic>=2.10.6",
     "pyyaml>=6.0.2",
 ]

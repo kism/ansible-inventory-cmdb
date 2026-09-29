@@ -27,17 +27,28 @@ WORKER_URL=http://localhost:8787 scripts/build-token.sh run
 To seed the *real* bucket from a local run, temporarily add `"remote": true` to the R2 binding in
 `wrangler.jsonc`. Take it back out afterwards — left in, every local dev run overwrites production.
 
-## Don't bump `compatibility_date` casually
+## Don't change `compatibility_date` casually
 
-A date of **2026-08-05 or later** makes Cloudflare reject the deploy:
+The date picks the Python version the edge runs — pywrangler's `metadata.py` maps it, and **2026-09-08 or later
+means Python 3.14**. Below that you get the 3.13 runtime, which never puts the bundled `python_modules` on
+`sys.path`, so the deploy is rejected:
 
 ```
-Uncaught Error: Dynamic require of "fs" is not supported ... in loadPyodide [code: 10021]
+File "/session/metadata/entry.py", line 18, in <module>
+  import yaml
+ModuleNotFoundError: No module named 'yaml' [code: 10021]
 ```
 
-Pyodide fails to boot during Cloudflare's deploy-time validation. This reproduces on a zero-dependency
-hello-world Python Worker, so it is a platform bug rather than anything in this project. `2026-08-01` is the
-newest date that deploys; re-test the boundary before raising it.
+`npm run dev` boots that same bundle without complaint, so local success proves nothing here. The ceiling is the
+workerd binary wrangler ships with: a date newer than that and `npm run dev` refuses to start.
+
+The date also decides which Pyodide index the vendored wheels come from, so after changing it:
+
+```bash
+rm pylock.toml              # it pins the previous runtime's wheels
+uv run pywrangler sync --force
+npm run check_worker
+```
 
 ## Layout
 
