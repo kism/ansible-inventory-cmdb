@@ -2,8 +2,8 @@
 
 Fixtures defined in a conftest.py can be used by any test in that package without needing to import them.
 
-Tests must always use the tmp_path fixture as an instance_path, otherwise they pollute each other (and your real
-instance folder) with config, the cmdb dump and the url cache. The `app` fixture asserts this.
+Tests must always use the tmp_path fixture as an instance_path: load_config() writes a default config.yml when it
+finds none, and that would land in your real instance folder.
 
 Inventory fetches are served by a real local HTTP server rather than a mocking library. HTTP mocking libraries patch
 client internals and break on the client's minor releases; a socket does not.
@@ -23,7 +23,7 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from ansibleinventorycmdb import create_app
+from ansibleinventorycmdb.app import create_app
 from ansibleinventorycmdb.config import Config
 
 if TYPE_CHECKING:
@@ -105,7 +105,6 @@ def mock_get_inventory_url(inventory_server):
 @pytest.fixture
 def app(tmp_path, get_test_config) -> FastAPI:
     """This fixture uses the default config within the app."""
-    assert "tmp" in str(tmp_path).lower(), "instance_path must be a tmp_path, see this module's docstring"
     return create_app(config=Config(**get_test_config("valid.yml")), instance_path=str(tmp_path))
 
 

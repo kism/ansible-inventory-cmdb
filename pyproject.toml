@@ -38,19 +38,15 @@ build-backend = "hatchling.build"
 packages = ["src/ansibleinventorycmdb"]
 
 [dependency-groups]
-dev = ["pyright"]
-
 type = ["ty"]
 
 lint = ["ruff"]
 
 test = [
     "pytest",
-    "pytest-cov",
-    "pytest-mock",
     "pytest-random-order",
+    "coverage",                     # `uv run coverage run`, the invocation is in [tool.coverage.run] below
     "types-pyyaml",
-    "detect-test-pollution",
     "httpx2",                       # Required by fastapi.testclient.TestClient
     "ansibleinventorycmdb[server]", # The tests exercise the web app, so they need the extra
 ]
@@ -60,24 +56,12 @@ worker = ["workers-py", "workers-runtime-sdk"]
 
 [tool.uv]
 package = true
-default-groups = ["dev", "test", "type", "lint", "worker"]
+default-groups = ["test", "type", "lint", "worker"]
 
 
 # src/entry.py imports the `workers` SDK, which only exists inside the Pyodide runtime.
 [tool.ty.src]
 exclude = ["src/entry.py"]
-
-[tool.pyright]
-exclude = [
-    "**/__pycache__, **/.*",
-    "src/entry.py",
-    "**/.venv",
-    ".venv-workers",         # pywrangler's Pyodide-pinned venv
-    "python_modules",        # pywrangler's vendored Worker dependencies
-    "**/node_modules",
-    "**/__pycache__",
-    "**/.*",
-]
 
 [tool.ruff]
 cache-dir = "~/.cache/ruff"
@@ -99,7 +83,6 @@ ignore = [
     "ISC001", # conflict in the formatter
     "COM812", # conflict in the formatter
     "G004",   # Fine to log this way
-    "S301",   # No user input, happy to use pickle
 ]
 
 [tool.ruff.lint.per-file-ignores]

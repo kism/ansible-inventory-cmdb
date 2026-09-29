@@ -11,12 +11,11 @@ uv sync --extra server # ...plus the FastAPI web app
 nvm install            # node 26, from .nvmrc
 npm install            # wrangler, pinned in package.json
 npm run fonts          # copies static/fonts from the @fontsource packages, see below
-ln -sf ../instance/config.yml src/config.yml  # both ends are gitignored; a fresh clone has neither
 scripts/build-token.sh set  # BUILD_TOKEN, needed before the Worker's /refresh endpoint works
 ```
 
-**Every Cloudflare command is an `npm run` script** in `package.json` — `login`, `bucket`, `dev`, `deploy`,
-`tail`. `npx wrangler` and `uv run pywrangler` are what those scripts call; don't put them in docs or suggest
+**Every Cloudflare command is an `npm run` script** in `package.json` — `login`, `bucket`, `domain`, `dev`,
+`deploy`, `tail`. `npx wrangler` and `uv run pywrangler` are what those scripts call; don't put them in docs or suggest
 them to the user. `pywrangler` proxies any subcommand it doesn't handle straight to `npx wrangler`, and syncs
 `python_modules` first for `dev`/`deploy` — the reason those two don't go through `npx` directly.
 
@@ -32,9 +31,9 @@ the Worker can't run belongs in the `server` extra. See *Dependency layout* belo
 | Run tests with coverage | `uv run coverage run && uv run coverage report`                        |
 | Lint                    | `uv run ruff check src tests`                                          |
 | Format                  | `uv run ruff format src tests`                                         |
-| Type check              | `uv run ty check` and `uv run pyright`                                 |
+| Type check              | `uv run ty check`                                                      |
 | Render the static site  | `uv run ansibleinventorycmdb-generate <output dir>`                    |
-| Dev server              | `uv run uvicorn ansibleinventorycmdb:create_app --factory --port 5100` |
+| Dev server              | `uv run uvicorn ansibleinventorycmdb.app:create_app --factory --port 5100` |
 | Worker dev / deploy     | `npm run dev` / `npm run deploy` (from the repo root)                  |
 | Check the Worker boots  | `npm run check_worker` (from the repo root)                            |
 
@@ -44,14 +43,14 @@ src layout, installed as a package (hatchling). Imports are `ansibleinventorycmd
 
 | Module                                                                         | Role                                                                              |
 | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| [`src/ansibleinventorycmdb/__init__.py`](src/ansibleinventorycmdb/__init__.py) | Lazy `create_app` re-export via PEP 562 `__getattr__`, nothing else               |
+| [`src/ansibleinventorycmdb/__init__.py`](src/ansibleinventorycmdb/__init__.py) | Docstring only. Importing the package must not pull in FastAPI, see below          |
 | [`src/ansibleinventorycmdb/app.py`](src/ansibleinventorycmdb/app.py)          | `create_app()` factory and the lifespan that owns the refresh task                |
 | [`src/ansibleinventorycmdb/__main__.py`](src/ansibleinventorycmdb/__main__.py) | `main()`, the `ansibleinventorycmdb` console script, runs uvicorn                 |
 | [`src/ansibleinventorycmdb/routes.py`](src/ansibleinventorycmdb/routes.py)     | `APIRouter`, templates, the `HTMLError` page handler, and the CMDB refresh loop   |
 | [`src/ansibleinventorycmdb/site.py`](src/ansibleinventorycmdb/site.py)        | Static site renderer, shared by the routes and the Worker. No FastAPI imports     |
 | [`src/ansibleinventorycmdb/cmdb.py`](src/ansibleinventorycmdb/cmdb.py)         | `AnsibleCMDB`: fetches inventory URLs, parses hosts/groups/vars, pickle URL cache |
 | [`src/ansibleinventorycmdb/config.py`](src/ansibleinventorycmdb/config.py)     | pydantic `Config`/`Inventory` models and `load_config()`                          |
-| [`src/ansibleinventorycmdb/logger.py`](src/ansibleinventorycmdb/logger.py)     | `LoggingConfig`, custom logger with TRACE level (5); use `get_logger(__name__)`   |
+| [`src/ansibleinventorycmdb/logger.py`](src/ansibleinventorycmdb/logger.py)     | `LoggingConfig` and `setup_logger`: one console handler, optionally a file one     |
 | [`src/entry.py`](src/entry.py)                                                | The Cloudflare Worker's entrypoint. Not part of the package, see below           |
 
 Templates use `.html.j2` extension (Jinja2) and all extend `base.html.j2`, which owns the `<head>`, the `<h2>`
@@ -64,10 +63,11 @@ The `.woff2` files under `static/fonts/` are checked in, but generated: `npm run
 ([`scripts/fetch-fonts.sh`](scripts/fetch-fonts.sh)) copies the latin, non-variable weights `zy.css`'s `@font-face`
 rules reference out of the `@fontsource/fira-code`/`@fontsource/noto-sans-display` devDependencies, under the
 existing filenames. Re-run it after bumping either package or adding a weight to `zy.css`; don't hand-edit the
-`.woff2` files. `npm run check_fonts` ([`scripts/check_fonts.mjs`](scripts/check_fonts.mjs), also a CI job) is what
-catches forgetting to: it serves the package directory over `python -m http.server`, loads `zy.css` in headless
-chromium and fails if any `@font-face` rule the sheet declares doesn't load. It reads the rules off the stylesheet
-rather than a hardcoded list, so adding a weight needs no change here.
+`.woff2` files. `npm run check_fonts` ([`scripts/check-fonts.sh`](scripts/check-fonts.sh), also a CI job) is what
+catches forgetting to: it greps the `url(...)` of every `@font-face` rule out of `zy.css` and checks each file is
+present and starts with the `wOF2` magic number. It reads the paths off the stylesheet rather than a hardcoded
+list, so adding a weight needs no change here. This used to load the sheet in headless chromium via playwright;
+don't bring that back for what four lines of shell cover.
 
 `requires-python` is `>=3.13`, not 3.14, because the Worker runs on Pyodide. On 3.13 annotations are evaluated at
 definition time, so any module with a `TYPE_CHECKING`-only import used in a signature needs
@@ -101,24 +101,29 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying) and
   wrangler's `base_dir` defaults to the entrypoint's directory, so `main: src/entry.py` makes `src/ansibleinventorycmdb`
   bundle at the same path it is imported from. There used to be an `rm -rf` + `cp -r` build command faking this;
   don't bring it back. `.pyc` files aren't a problem — no module rule matches them.
-- `src/entry.py` is excluded from `ty` and `pyright` in `pyproject.toml`; its `workers` import only resolves inside
+- `src/entry.py` is excluded from `ty` in `pyproject.toml`; its `workers` import only resolves inside
   Pyodide. It is deliberately *not* inside the package: in the bundle it's a top-level module, so it needs the
   absolute `ansibleinventorycmdb.*` imports it has.
+- **The deployment is the repo**, not arguments to `deploy`: `wrangler.jsonc` holds the bucket, cron and module
+  rules, `src/config.yml` the inventories, `package.json`'s `domain` script the custom domain
+  (`cmdb.kierangee.au`). Deploying elsewhere means forking and editing those. The one piece none of them can
+  express is the zone URL Rewrite appending `index.html`, covered above.
 - Non-`.py` files need a `rules` entry in `wrangler.jsonc` or they are silently left out of the bundle — that's
   what carries the templates, CSS, fonts and `src/config.yml`.
-- **There is one config file, `instance/config.yml`.** `src/config.yml` is a symlink to it — the Worker has
-  no instance path at runtime, and wrangler can only bundle what's under `base_dir` (`src/`), so the symlink is how
-  the one file gets in. wrangler resolves it at bundle time. **Both are gitignored**, the link included
-  (`.gitignore:180`), so a fresh clone has neither and `npm run dev`/`deploy` stop until you make them:
-  `ln -sf ../instance/config.yml src/config.yml`. Tracking the link would only invite an editor that replaced it
-  with a regular file to commit somebody's real config. The `check_worker` CI job creates both.
-  wrangler drops a `rules` glob that matches nothing without a word, so the only symptom is `FileNotFoundError`
-  on `/session/metadata/config.yml` at import. `npm run dev`/`npm run deploy` preflight it (`check-config` in
-  `package.json`); bare `uv run pywrangler deploy` does not. The check also rejects a *regular* `src/config.yml`,
-  which editors have recreated when the link's target went missing — that's the two-configs bug coming back.
-- Three imports are deferred so the Worker doesn't have to install what it never uses, or can't:
-  `create_app`/FastAPI in `__init__.py`, `httpx` in `cmdb.httpx_fetcher`, and `pwd` in `config._write_config`
-  (Pyodide has no `pwd`).
+- **`src/config.yml` is tracked, and it is the Worker's whole config.** A Worker has no instance path at runtime
+  and no writable filesystem for `load_config`'s write-the-defaults fallback, so `entry.py` parses this file
+  directly at import; wrangler can only bundle what's under `base_dir` (`src/`), which is why it lives there.
+  It used to be a gitignored symlink to `instance/config.yml`; **don't reintroduce that.** The deployment is meant
+  to be the repo — a fork changes `src/config.yml`, `wrangler.jsonc` and nothing else — and a checkout with no
+  config produced a bundle that died on import with `FileNotFoundError` on `/session/metadata/config.yml`, because
+  wrangler drops a `rules` glob that matches nothing without a word. There is nothing secret in it: every page it
+  renders is served publicly. The web app and `generate` still read `instance/config.yml` via `load_config()`;
+  that path is untouched.
+- The Worker must not have to install what it never uses, or can't. `__init__.py` is empty so importing the
+  package reaches no FastAPI — the uvicorn target is `ansibleinventorycmdb.app:create_app`, not
+  `ansibleinventorycmdb:create_app`; there was a PEP 562 `__getattr__` shim faking the short form, don't bring it
+  back. `httpx` is imported inside `cmdb.httpx_fetcher`, and `pwd` inside `config._write_config` (no `pwd` in
+  Pyodide).
 - **`compatibility_date` has two independent ceilings, and the second one is not obvious.** Newer than the workerd
   binary wrangler ships with and `npm run dev` won't start. **2026-08-05 or later and the deploy is rejected**
   with `Dynamic require of "fs" is not supported` from `loadPyodide` — Pyodide fails to boot in Cloudflare's
@@ -208,8 +213,12 @@ read the already-built in-memory dicts — they never fetch.
   inventory.
 - The URL cache and the dump are written once at the end of `build()`, via `asyncio.to_thread`. Don't move the cache
   write back into `_get_yaml` — concurrent fetches would race the same file.
-- `AnsibleCMDB(inventories)` with no `instance_path` skips the cache and the dump entirely. That's the Worker's
-  path: Workers have no writable filesystem, and Pyodide has no threads for `asyncio.to_thread`.
+- **`AnsibleCMDB` writes nothing to disk, in any mode.** `url_cache` dedupes fetches *within* one build — a
+  group's vars file is otherwise probed once per host in it — and is dropped after. There used to be a pickled
+  `url_cache.pkl` and a `cmdb_dump.yml` under the instance path; don't reintroduce either. Nothing read the dump,
+  and the pickle's only effect was that the first pages after a restart served yesterday's data before the real
+  build replaced it. It also means no `instance_path` argument, no `asyncio.to_thread` (Pyodide has no threads)
+  and no special case for the Worker's read-only filesystem.
 - `_get_yaml` swallows every fetch exception into an `{"error": True, ...}` dict so one dead URL can't fail the whole
   build. Failures are therefore invisible except in the logs — see the test fixtures below. `_usable_inventory`
   exists because that error dict was otherwise walked as if it were an inventory, dying on `True["hosts"]` several
@@ -219,8 +228,9 @@ read the already-built in-memory dicts — they never fetch.
 
 ## Configuration
 
-Config file: `instance/config.yml`. See [instance/config.yml](instance/config.yml) for the canonical example.
-Key sections: `cmdb` (inventory URLs + schema_mapping) and `logging`.
+Two files, same schema, one `Config` model. The web app and `generate` load `instance/config.yml` (gitignored) via
+`load_config()`; the Worker parses the tracked [`src/config.yml`](src/config.yml) at import. Key sections: `cmdb`
+(inventory URLs + schema_mapping) and `logging`.
 
 All models set `extra="forbid"`, so an unknown key is a startup failure, not a warning. Adding a config option means
 adding a field to the model in [`config.py`](src/ansibleinventorycmdb/config.py).
@@ -250,8 +260,8 @@ uv run pytest --random-order    # order independence
 - `build_cmdb` runs the async `refresh()` from a sync test via `asyncio.run`. There is no pytest-asyncio.
 - The `client` fixture does **not** enter the TestClient context, so the lifespan and its refresh task don't run.
   `test_lifespan_builds_cmdb` covers the lifespan and waits for the build before leaving the context.
-- Always pass `tmp_path` as `instance_path`; the `app` fixture asserts this. Tests that build their own
-  `AnsibleCMDB` need their own subdirectory, or its `url_cache.pkl` collides with the app's.
+- Always pass `tmp_path` as `instance_path` to `create_app`: with none, `load_config()` writes its default
+  config into your real `instance/`. `AnsibleCMDB` takes no path and writes nothing, so it needs no tmp dir.
 - Test configs live in [`tests/configs/`](tests/configs/); test inventories in [`tests/inventories/`](tests/inventories/).
 
 ## Code Conventions
@@ -260,4 +270,5 @@ uv run pytest --random-order    # order independence
 - **Google-style docstrings** required on all modules, classes, and public functions.
 - **Double quotes**, max line length **120**.
 - `ruff` is configured with `select = ["ALL"]` and selective ignores — run `ruff check` before committing.
-- Module logger: `logger = get_logger(__name__)` at module level.
+- Module logger: `logger = logging.getLogger(__name__)` at module level. `setup_logger` configures the root
+  logger, so every module inherits it; there is no wrapper to go through and no custom TRACE level.

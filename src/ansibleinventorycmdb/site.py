@@ -11,6 +11,8 @@ serves the same links the web app does. The one exception is `/`, which no objec
 from __future__ import annotations
 
 import json
+import logging
+import mimetypes
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -19,31 +21,21 @@ import yaml
 from jinja2 import Environment, FileSystemLoader
 
 from .constants import PROGRAM_REPO_URL, version_string
-from .logger import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from .config import Inventory
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
 
+# The page and json keys have no extension, so those two are stated; every static asset gets its type from
+# mimetypes, which knows all of the extensions under static/, woff2 and webmanifest included.
 HTML_CONTENT_TYPE = "text/html; charset=utf-8"
 JSON_CONTENT_TYPE = "application/json"
-
-# Only the extensions that actually live in static/. stdlib mimetypes doesn't know woff2 or webmanifest.
-CONTENT_TYPES = {
-    ".css": "text/css",
-    ".js": "text/javascript",
-    ".woff2": "font/woff2",
-    ".ico": "image/x-icon",
-    ".png": "image/png",
-    ".webmanifest": "application/manifest+json",
-    ".txt": "text/plain; charset=utf-8",
-}
 
 # A static host has no index document, so every page has to be linked to by name. Naming them all index.html also
 # keeps a page key from shadowing the directory its children live in (`inventory/x` vs `inventory/x/host/y`), which
@@ -137,7 +129,8 @@ def render_site(
     for path in sorted(STATIC_DIR.rglob("*")):
         if path.is_file():
             key = f"static/{path.relative_to(STATIC_DIR).as_posix()}"
-            yield key, path.read_bytes(), CONTENT_TYPES.get(path.suffix, "application/octet-stream")
+            content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            yield key, path.read_bytes(), content_type
 
 
 def _render_inventory(
@@ -227,7 +220,7 @@ def main() -> None:
     instance_path = get_instance_path()
     config = load_config(instance_path)
 
-    cmdb = AnsibleCMDB(config.cmdb, instance_path)
+    cmdb = AnsibleCMDB(config.cmdb)
     asyncio.run(cmdb.build())
 
     count = write_site(cmdb.inventories, config.cmdb, out_dir, cmdb.built_at)

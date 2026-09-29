@@ -1,13 +1,14 @@
 """Config models and loading."""
 
+import logging
 import os
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from .logger import LoggingConfig, get_logger
+from .logger import LoggingConfig
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 DEFAULT_INVENTORY_URL = "https://raw.githubusercontent.com/kism/ansible-playbooks/refs/heads/main/inventory/main.yml"
 

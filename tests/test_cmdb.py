@@ -4,16 +4,15 @@ from ansibleinventorycmdb.cmdb import AnsibleCMDB
 from ansibleinventorycmdb.config import Config
 
 
-def test_object_creation(tmp_path, get_test_config, build_cmdb):
+def test_object_creation(get_test_config, build_cmdb):
     """TEST: The CMDB builds from a mocked inventory and exposes its hosts and groups."""
-    cmdb = AnsibleCMDB(instance_path=str(tmp_path), inventories=Config(**get_test_config("valid.yml")).cmdb)
+    cmdb = AnsibleCMDB(Config(**get_test_config("valid.yml")).cmdb)
 
     assert not cmdb.ready
 
     build_cmdb(cmdb)
 
     assert cmdb.ready
-    assert not cmdb.refresh_required
 
     inventory = cmdb.get_inventory("test_main")
     assert set(inventory["hosts"]) == {"hostone", "hosttwo", "grouptwo"}
@@ -25,12 +24,10 @@ def test_object_creation(tmp_path, get_test_config, build_cmdb):
     assert cmdb.get_group("test_main", "nope") == {}
 
 
-def test_url_cache_reload(tmp_path, get_test_config, build_cmdb):
-    """TEST: A second CMDB picks up the pickled url cache written by the first and flags a refresh."""
-    inventories = Config(**get_test_config("valid.yml")).cmdb
+def test_build_writes_nothing_to_disk(tmp_path, get_test_config, build_cmdb, monkeypatch):
+    """TEST: A build touches no filesystem. The Worker has none, and a stale cache would outlive a restart."""
+    monkeypatch.chdir(tmp_path)
 
-    build_cmdb(AnsibleCMDB(instance_path=str(tmp_path), inventories=inventories))
+    build_cmdb(AnsibleCMDB(Config(**get_test_config("valid.yml")).cmdb))
 
-    cmdb = AnsibleCMDB(instance_path=str(tmp_path), inventories=inventories)
-    assert cmdb.url_cache != {}
-    assert cmdb.refresh_required
+    assert list(tmp_path.iterdir()) == []

@@ -1,0 +1,13 @@
+---
+# The Worker's config, bundled into it (wrangler.jsonc's Data rules carry *.yml).
+# Tracked on purpose: there is no instance path in a Worker, so this is the only way the config gets in.
+# Forking to deploy your own? Put your inventories here, and your bucket/domain in wrangler.jsonc.
+cmdb:
+  kism_main: # An arbitrary name for the inventory
+    inventory_url: https://raw.githubusercontent.com/kism/ansible-playbooks/refs/heads/main/inventory/main.yml
+    schema_mapping: # Ansible var -> column heading on the inventory page
+      ansible_host: Hostname
+      ansible_host_description: Description
+logging:
+  level: INFO
+  path: "" # Workers have no writable filesystem, so console only

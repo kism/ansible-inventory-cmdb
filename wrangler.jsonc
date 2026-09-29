@@ -44,8 +44,13 @@
 			"0 14 * * *"
 		]
 	},
-	// Create with: wrangler r2 bucket create ansible-inventory-cmdb
-	// then enable public access on it (custom domain, or the r2.dev development URL).
+	// This, the cron above and src/config.yml are the whole deployment. Forking to run your own? Change the
+	// bucket name here, the domain in package.json's `domain` script, and the inventories in src/config.yml.
+	// Create the bucket with `npm run bucket`, then put it on a custom domain with `npm run domain`
+	// (CF_ZONE_ID=<zone id from the domain's dashboard overview>) — https://cmdb.kierangee.au here.
+	// The domain also needs a zone-level URL Rewrite appending index.html to paths ending in `/`; R2 has no
+	// index document and that cannot live here, since requests to the bucket never reach this Worker.
+	// Recipe in README_Wrangler.md.
 	"r2_buckets": [
 		{
 			"binding": "CMDB_BUCKET",

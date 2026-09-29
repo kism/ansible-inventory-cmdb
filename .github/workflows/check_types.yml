@@ -26,7 +26,7 @@ jobs:
 
       - name: Install the project
         # The test group stays: ty checks tests/ too, and it's what pulls in pytest and the `server` extra.
-        run: uv sync --no-group lint --no-group dev --no-group worker
+        run: uv sync --no-group lint --no-group worker
 
       - name: Check types with ty
         run: uv run ty check

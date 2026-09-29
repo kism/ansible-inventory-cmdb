@@ -9,6 +9,7 @@ To trigger a build during `pywrangler dev`, curl http://localhost:8787/cdn-cgi/h
 
 import hmac
 import json
+import logging
 import os
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,15 +21,15 @@ from workers import Response, WorkerEntrypoint, fetch
 from ansibleinventorycmdb.cmdb import AnsibleCMDB, github_zip_fetcher
 from ansibleinventorycmdb.config import Config
 from ansibleinventorycmdb.constants import COMMIT_SHA_ENV_VAR
-from ansibleinventorycmdb.logger import get_logger, setup_logger
+from ansibleinventorycmdb.logger import setup_logger
 from ansibleinventorycmdb.site import render_site
 
-# src/config.yml is a symlink to instance/config.yml, so there is only ever one config file. Workers have no
-# instance path to read one from at runtime, so it is bundled (wrangler resolves the symlink at bundle time).
+# Read the bundled config.yml rather than config.load_config(): a Worker has no instance path, and no writable
+# filesystem for load_config's write-the-defaults fallback. src/config.yml is tracked, so the bundle always has one.
 CONFIG = Config(**yaml.safe_load((Path(__file__).parent / "config.yml").read_text()))
 
 setup_logger(CONFIG.logging)
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 # The cron runs daily, so anything past a day plus a couple of hours of slack means a run was missed or failed.
 STALE_AFTER_SECONDS = 26 * 60 * 60

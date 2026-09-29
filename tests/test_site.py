@@ -23,10 +23,10 @@ MIN_EXPECTED_LINKS = 10
 
 
 @pytest.fixture
-def site(tmp_path, get_test_config, build_cmdb) -> dict[str, tuple[bytes, str]]:
+def site(get_test_config, build_cmdb) -> dict[str, tuple[bytes, str]]:
     """The whole rendered site from the test inventory, keyed by object key."""
     config = Config(**get_test_config("valid.yml"))
-    cmdb = build_cmdb(AnsibleCMDB(config.cmdb, str(tmp_path)))
+    cmdb = build_cmdb(AnsibleCMDB(config.cmdb))
     return {
         key: (body, content_type)
         for key, body, content_type in render_site(cmdb.inventories, config.cmdb, cmdb.built_at)
@@ -95,16 +95,7 @@ def test_host_page_contains_vars(site):
     assert "hostone.pytest.internal" in body
 
 
-def test_cmdb_without_instance_path_writes_nothing(tmp_path, get_test_config, build_cmdb):
-    """The Worker runs with no writable filesystem, so instance_path=None must not touch disk."""
-    config = Config(**get_test_config("valid.yml"))
-    cmdb = build_cmdb(AnsibleCMDB(config.cmdb))
-
-    assert cmdb.ready
-    assert list(tmp_path.iterdir()) == []
-
-
-def test_build_uses_the_supplied_fetcher(tmp_path, get_test_config):
+def test_build_uses_the_supplied_fetcher(get_test_config):
     """The Worker passes its own fetch, the Workers runtime's, rather than the default httpx one."""
     config = Config(**get_test_config("valid.yml"))
     fetched = []
@@ -116,7 +107,7 @@ def test_build_uses_the_supplied_fetcher(tmp_path, get_test_config):
             return (Path(__file__).parent / "inventories" / "main.yml").read_text()
         return ""
 
-    cmdb = AnsibleCMDB(config.cmdb, str(tmp_path))
+    cmdb = AnsibleCMDB(config.cmdb)
     asyncio.run(cmdb.build(fetch_text))
 
     assert cmdb.ready
@@ -124,14 +115,14 @@ def test_build_uses_the_supplied_fetcher(tmp_path, get_test_config):
     assert cmdb.get_host("test_main", "hostone")["vars"]["ansible_host"] == "hostone.pytest.internal"
 
 
-def test_unusable_inventory_is_skipped(tmp_path, get_test_config, caplog):
+def test_unusable_inventory_is_skipped(get_test_config, caplog):
     """A failed inventory fetch becomes an error dict; walking it as an inventory would die confusingly."""
     config = Config(**get_test_config("valid.yml"))
 
     async def fetch_text(url: str) -> str | None:  # url unused, the signature is the fetcher contract
         return "not: an inventory"
 
-    cmdb = AnsibleCMDB(config.cmdb, str(tmp_path))
+    cmdb = AnsibleCMDB(config.cmdb)
     asyncio.run(cmdb.build(fetch_text))
 
     assert cmdb.get_inventory("test_main")["hosts"] == {}

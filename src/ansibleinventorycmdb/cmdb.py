@@ -5,16 +5,13 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import io
-import os
-import pickle
+import logging
 import re
 import zipfile
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import yaml
-
-from .logger import get_logger
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable
@@ -25,7 +22,7 @@ if TYPE_CHECKING:
     FetchText = Callable[[str], Awaitable[str | None]]
     FetchBytes = Callable[[str], Awaitable[bytes | None]]
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT_SECONDS = 5
 CONCURRENT_REQUEST_LIMIT = 10  # Be polite to whatever is hosting the inventory
@@ -125,21 +122,17 @@ def github_zip_fetcher(fetch_bytes: FetchBytes) -> FetchText:
 class AnsibleCMDB:
     """Ansible CMDB object."""
 
-    def __init__(self, inventories: dict[str, Inventory], instance_path: str | None = None) -> None:
+    def __init__(self, inventories: dict[str, Inventory]) -> None:
         """Initialise the Ansible CMDB object.
 
         Args:
             inventories: The inventories to build, from Config.cmdb.
-            instance_path: Where to keep the URL cache and the CMDB dump. None disables both, for environments
-                with no writable filesystem, such as a Cloudflare Worker.
         """
-        self._instance_path = instance_path
-        self._dump_file = os.path.join(instance_path, "cmdb_dump.yml") if instance_path else ""
-        self._cache_file = os.path.join(instance_path, "url_cache.pkl") if instance_path else ""
         self.inventories: dict[str, dict] = {}
+        # Dedupes fetches within one build — a group's vars file is probed once per host in it. Not persisted:
+        # a cache that survives a restart only means the first pages served are yesterday's data.
         self.url_cache: dict = {}
         self.ready = False
-        self.refresh_required = False
         self.built_at = ""  # Set by build(), see there for why it isn't a module-level constant
         # Recreated per build, since an asyncio primitive binds to the loop that first awaits it.
         self._request_limit = asyncio.Semaphore(CONCURRENT_REQUEST_LIMIT)
@@ -150,34 +143,12 @@ class AnsibleCMDB:
                 "base_url": re.sub(r"/inventory.*", "", inventory.inventory_url),
             }
 
-        self._load_url_cache()
-
-    def _load_url_cache(self) -> None:
-        """Setup the URL cache."""
-        if self._instance_path and os.path.isfile(self._cache_file):
-            with open(self._cache_file, "rb") as cache_file:
-                logger.info(f"Loaded URL cache file: {self._cache_file}")
-                self.url_cache = pickle.load(cache_file)
-                self.refresh_required = True
-
-    def _write_output(self) -> None:
-        """Write the URL cache and the CMDB dump to disk.
-
-        Called once per build. Fetches run concurrently, so a per-fetch cache write would race itself.
-        """
-        with open(self._cache_file, "wb") as cache_file:
-            pickle.dump(self.url_cache, cache_file, pickle.HIGHEST_PROTOCOL)
-
-        with open(self._dump_file, "w") as dump_file:
-            yaml.dump(self.inventories, dump_file, explicit_start=True)
-
     async def refresh(self, fetch_text: FetchText | None = None) -> None:
         """Refresh the CMDB data. See build() for fetch_text."""
         logger.info("Refreshing CMDB")
         self.url_cache = {}
         await self.build(fetch_text)
         logger.info("CMDB refresh complete")
-        self.refresh_required = False
 
     async def build(self, fetch_text: FetchText | None = None) -> None:
         """Build the CMDB.
@@ -196,9 +167,6 @@ class AnsibleCMDB:
         else:
             await self._build_inventories(fetch_text)
 
-        if self._instance_path:
-            await asyncio.to_thread(self._write_output)  # Blocking IO, keep it off the event loop
-
         # Stamped here rather than at import: on a deployed Worker the clock reads 0 until the isolate has done
         # I/O, so anything captured at module scope renders as 1970-01-01. By now the fetches have happened.
         self.built_at = datetime.now(tz=UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -207,43 +175,29 @@ class AnsibleCMDB:
         self.ready = True
 
     async def _build_inventories(self, fetch_text: FetchText) -> None:
-        """Fetch and populate the hosts and groups of every inventory."""
+        """Fetch every inventory once, then populate its hosts and groups from the one parsed copy."""
         for inventory_tmp_dict in self.inventories.values():
-            inventory_tmp_dict["hosts"] = await self._build_cmdb_hosts(inventory_tmp_dict, fetch_text)
-            inventory_tmp_dict["groups"] = await self._build_cmdb_groups(inventory_tmp_dict, fetch_text)
+            inventory_yaml = await self._get_yaml(inventory_tmp_dict["url"], fetch_text)
+            if not self._usable_inventory(inventory_yaml, inventory_tmp_dict["url"]):
+                inventory_yaml = {}
 
-    def get_inventories(self) -> dict:
-        """Get the inventories."""
-        return self.inventories
+            inventory_tmp_dict["hosts"] = await self._build_cmdb_hosts(inventory_tmp_dict, inventory_yaml, fetch_text)
+            inventory_tmp_dict["groups"] = await self._build_cmdb_groups(inventory_tmp_dict, inventory_yaml, fetch_text)
 
     def get_inventory(self, inventory: str) -> dict:
-        """Get an inventory."""
-        try:
-            return self.inventories[inventory]
-        except KeyError:
-            return {}
+        """Get an inventory. Empty dict if there is no such inventory."""
+        return self.inventories.get(inventory, {})
 
     def get_host(self, inventory: str, host: str) -> dict:
-        """Get a hosts vars."""
-        try:
-            return self.inventories[inventory]["hosts"][host]
-        except KeyError:
-            return {}
+        """Get a hosts vars. Empty dict if there is no such inventory or host."""
+        return self.get_inventory(inventory).get("hosts", {}).get(host, {})
 
     def get_group(self, inventory: str, group: str) -> dict:
-        """Get a groups vars."""
-        try:
-            return self.inventories[inventory]["groups"][group]
-        except KeyError:
-            return {}
+        """Get a groups vars. Empty dict if there is no such inventory or group."""
+        return self.get_inventory(inventory).get("groups", {}).get(group, {})
 
-    async def _build_cmdb_groups(self, inventory_dict: dict, fetch_text: FetchText) -> dict:
-        """Build the CMDB groups from the inventory."""
-        inventory_yaml = await self._get_yaml(inventory_dict["url"], fetch_text)
-
-        if not self._usable_inventory(inventory_yaml, inventory_dict["url"]):
-            return {}
-
+    async def _build_cmdb_groups(self, inventory_dict: dict, inventory_yaml: dict, fetch_text: FetchText) -> dict:
+        """Build the CMDB groups from the already-fetched inventory."""
         groups: dict = {group: {} for group in inventory_yaml}
 
         await asyncio.gather(
@@ -255,13 +209,8 @@ class AnsibleCMDB:
 
         return groups
 
-    async def _build_cmdb_hosts(self, inventory_dict: dict, fetch_text: FetchText) -> dict:
-        """Build the CMDB hosts from the inventory."""
-        inventory_yaml = await self._get_yaml(inventory_dict["url"], fetch_text)
-
-        if not self._usable_inventory(inventory_yaml, inventory_dict["url"]):
-            return {}
-
+    async def _build_cmdb_hosts(self, inventory_dict: dict, inventory_yaml: dict, fetch_text: FetchText) -> dict:
+        """Build the CMDB hosts from the already-fetched inventory."""
         hosts: dict = {}
         for group in inventory_yaml:
             for host in inventory_yaml[group]["hosts"]:
@@ -355,6 +304,6 @@ class AnsibleCMDB:
             self.url_cache[url] = temp_yaml
 
         else:
-            logger.trace(f"Using cached URL: {url}")
+            logger.debug(f"Using cached URL: {url}")
 
         return self.url_cache[url]

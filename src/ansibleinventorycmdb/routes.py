@@ -1,6 +1,7 @@
 """Routes, templates and the CMDB refresh loop."""
 
 import asyncio
+import logging
 from http import HTTPStatus
 from typing import Annotated
 
@@ -10,16 +11,14 @@ from fastapi.templating import Jinja2Templates
 
 from .cmdb import AnsibleCMDB
 from .constants import PROGRAM_REPO_URL, PROGRAM_VERSION, version_string
-from .logger import get_logger
 from .site import TEMPLATES_DIR, dump_vars, group_hosts, group_list
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 REFRESH_INTERVAL_SECONDS = 21600  # 6 hours
 
 # The web app serves each page at its bare path; the static site appends /index.html to all of them. See site.py.
-ROOT_HREF = "/"
-PAGE_SUFFIX = ""
+LINK_STYLE = {"root_href": "/", "page_suffix": ""}
 
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
@@ -42,7 +41,7 @@ async def html_error_handler(request: Request, exc: Exception) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "error.html.j2",
-        {"error": exc.message, "root_href": ROOT_HREF, "page_suffix": PAGE_SUFFIX},
+        {"error": exc.message, **LINK_STYLE},
         status_code=exc.status,
     )
 
@@ -57,11 +56,11 @@ def get_cmdb(request: Request) -> AnsibleCMDB:
 
 
 def get_cmdb_json(request: Request) -> AnsibleCMDB:
-    """Dependency for JSON routes, same as get_cmdb but errors as JSON."""
-    cmdb = getattr(request.app.state, "cmdb", None)
-    if not isinstance(cmdb, AnsibleCMDB):
-        raise HTTPException(HTTPStatus.INTERNAL_SERVER_ERROR, "No CMDB found")
-    return cmdb
+    """Dependency for JSON routes: the same check as get_cmdb, raised so it renders as JSON rather than a page."""
+    try:
+        return get_cmdb(request)
+    except HTMLError as exc:
+        raise HTTPException(HTTPStatus.INTERNAL_SERVER_ERROR, exc.message) from None
 
 
 CMDB = Annotated[AnsibleCMDB, Depends(get_cmdb)]
@@ -78,10 +77,6 @@ async def refresh_cmdb(cmdb: AnsibleCMDB) -> None:
         if not cmdb.ready:
             logger.info("CMDB not ready, building...")
             await cmdb.build()
-
-        if cmdb.refresh_required:
-            logger.info("CMDB refresh required, refreshing...")
-            await cmdb.refresh()
 
         while True:
             logger.info("Sleeping for %s seconds before next refresh", REFRESH_INTERVAL_SECONDS)
@@ -102,9 +97,8 @@ def home(request: Request, cmdb: CMDB) -> HTMLResponse:
         request,
         "home.html.j2",
         {
-            "inventories": cmdb.get_inventories(),
-            "root_href": ROOT_HREF,
-            "page_suffix": PAGE_SUFFIX,
+            "inventories": cmdb.inventories,
+            **LINK_STYLE,
             "program_version": version_string(),
             "program_repo_url": PROGRAM_REPO_URL,
             "generated_at": cmdb.built_at,
@@ -137,8 +131,7 @@ def inventory(request: Request, inventory: str, cmdb: CMDB) -> HTMLResponse:
             "inventory_dict": inventory_dict,
             "schema_mapping": schema_mapping,
             "groups": group_list(inventory_dict),
-            "root_href": ROOT_HREF,
-            "page_suffix": PAGE_SUFFIX,
+            **LINK_STYLE,
         },
     )
 
@@ -164,8 +157,7 @@ def host(request: Request, inventory: str, host: str, cmdb: CMDB) -> HTMLRespons
             "__thing": "host_vars",
             "__host": host,
             "__vars": host_nice_vars,
-            "root_href": ROOT_HREF,
-            "page_suffix": PAGE_SUFFIX,
+            **LINK_STYLE,
         },
     )
 
@@ -188,8 +180,7 @@ def group(request: Request, inventory: str, group: str, cmdb: CMDB) -> HTMLRespo
             "__thing": "group_vars",
             "__host": group,
             "__vars": group_nice_vars,
-            "root_href": ROOT_HREF,
-            "page_suffix": PAGE_SUFFIX,
+            **LINK_STYLE,
         },
         status_code=status,
     )

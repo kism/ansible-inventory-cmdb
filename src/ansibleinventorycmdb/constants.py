@@ -1,9 +1,8 @@
 """Version tracking within the package."""
 
 import os
-from pathlib import Path
 
-PROGRAM_NAME = Path(__file__).parent.name.replace("_", "-").lower()  # Calculate this
+PROGRAM_NAME = "ansibleinventorycmdb"  # The package name; test__meta.py checks it against pyproject.toml
 PROGRAM_REPO_URL = "https://github.com/kism/ansible-inventory-cmdb"
 
 # Bump this and pyproject.toml together; test__meta.py fails if they drift, and again if uv.lock is stale.

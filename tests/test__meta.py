@@ -17,6 +17,7 @@ def test_version_pyproject() -> None:
     with Path("pyproject.toml").open("rb") as f:
         pyproject_toml = tomllib.load(f)
     assert pyproject_toml.get("project", {}).get("version", None) == PROGRAM_VERSION
+    assert pyproject_toml.get("project", {}).get("name", None) == PROGRAM_NAME
 
 
 def test_version_lock() -> None:

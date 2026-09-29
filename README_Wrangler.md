@@ -12,26 +12,36 @@ times two paths), over the free plan's cap of 50.
 
 ## Deploy
 
+**This deploys [cmdb.kierangee.au](https://cmdb.kierangee.au).** The deployment is config in the repo, not
+parameters you pass in — [`src/config.yml`](src/config.yml) holds the inventories and
+[`wrangler.jsonc`](wrangler.jsonc) the bucket, cron and domain. To run your own, fork it and change those; there
+are only three edits, and `wrangler.jsonc`'s comments name them.
+
 Every Cloudflare command is an `npm run` script in [`package.json`](package.json), so there is nothing to install
 globally and nothing to remember about flags. Run them from the repo root — there is one `pyproject.toml`, and
 pywrangler insists on finding `wrangler.jsonc` beside it.
 
 ```bash
 uv sync
-nvm install                     # node 26, from .nvmrc
+nvm install                             # node 26, from .nvmrc
 npm install
 npm run login
-npm run bucket                  # then enable public access on it in the dashboard
-$EDITOR instance/config.yml     # the one config file; both it and the symlink below are gitignored
-ln -sf ../instance/config.yml src/config.yml   # how it gets into the bundle, see below
+npm run bucket                          # create the R2 bucket
+CF_ZONE_ID=<zone id> npm run domain     # put it on cmdb.kierangee.au, see URLs below
+$EDITOR src/config.yml                  # your inventories, if this is a fork
 npm run deploy
-./scripts/build-token.sh set      # the on-demand build endpoint, see below
-./scripts/build-token.sh run      # seed the bucket now, rather than waiting for 14:00 UTC
+./scripts/build-token.sh set            # the on-demand build endpoint, see below
+./scripts/build-token.sh run            # seed the bucket now, rather than waiting for 14:00 UTC
 ```
 
-`npm run deploy` preflights that `src/config.yml` is a symlink that resolves — a missing or dangling link is
-bundled as nothing at all, and the Worker then dies on import with
-`FileNotFoundError: /session/metadata/config.yml`. Calling `pywrangler` directly skips that check.
+The zone ID is on the domain's dashboard overview page. Skipping the custom domain works too — enable the `r2.dev`
+development URL on the bucket instead — but then nothing rewrites `/` to `/index.html`, so only the explicit
+`/index.html` links work.
+
+`src/config.yml` is bundled with the Worker because a Worker has no instance path to read a config from at
+runtime, and `wrangler.jsonc`'s `Data` rules carry `*.yml` into the bundle. It is tracked rather than gitignored
+for the same reason: a checkout with no config produces a bundle that dies on import with
+`FileNotFoundError: /session/metadata/config.yml`. It is not secret — the whole site it renders is public.
 
 ## Running a build
 
@@ -89,7 +99,7 @@ status code is **503**, so an uptime monitor can watch the URL without parsing a
 Same answer straight from the site, if you'd rather not involve the Worker:
 
 ```bash
-curl -sI https://<your-domain>/index.html | grep -i last-modified
+curl -sI https://cmdb.kierangee.au/index.html | grep -i last-modified
 ```
 
 Don't use `wrangler r2 bucket info` for this. Its `object_count` is a lagging metric and still read `0` several
@@ -102,13 +112,14 @@ written as `<path>/index.html` and linked that way; bare `/` and `/inventory/x/`
 and 404.
 
 A **URL Rewrite** on the zone in front of the bucket fixes it — a rewrite rather than a redirect, so the address
-bar keeps the clean path. It cannot live in `wrangler.jsonc`: the Worker only _writes_ objects on its cron
-trigger, and requests to the bucket's domain go straight to R2 without reaching it. Being zone config, it does
-**not** travel with `npm run deploy`; a new bucket or domain needs it again.
+bar keeps the clean path. It is the one piece of the deployment that `npm run domain` and `wrangler.jsonc` can't
+express: the Worker only _writes_ objects on its cron trigger, and requests to the bucket's domain go straight to
+R2 without reaching it. Being zone config, it does **not** travel with `npm run deploy`; a new bucket or domain
+needs it again.
 
 In the dashboard, **Rules → Overview → Create rule → URL Rewrite Rule**, leaving _Query_ alone:
 
-| Field                    | Value                                                                      |
-| ------------------------ | -------------------------------------------------------------------------- |
-| Custom filter expression | `(http.host eq "<your-domain>" and ends_with(http.request.uri.path, "/"))` |
-| Path → Rewrite to        | **Dynamic**, `concat(http.request.uri.path, "index.html")`                 |
+| Field                    | Value                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------- |
+| Custom filter expression | `(http.host eq "cmdb.kierangee.au" and ends_with(http.request.uri.path, "/"))`    |
+| Path → Rewrite to        | **Dynamic**, `concat(http.request.uri.path, "index.html")`                        |

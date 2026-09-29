@@ -10,10 +10,6 @@ npm run dev
 curl http://localhost:8787/cdn-cgi/handler/scheduled   # cron triggers don't fire in dev
 ```
 
-`npm run dev` preflights that `src/config.yml` is a symlink that resolves, the same as `deploy` does — a missing
-or dangling link is bundled as nothing at all, and the Worker then dies on import with
-`FileNotFoundError: /session/metadata/config.yml`. Calling `pywrangler` directly skips that check.
-
 `npm run check_worker` is the same thing without the babysitting: it starts the dev server, waits for an
 untokened `/refresh` to answer 404 and for `/status` to return its JSON, then shuts it down. That covers the two ways the
 Worker breaks without pytest noticing — a dependency that won't resolve against the Pyodide index, and a bundle
@@ -48,8 +44,8 @@ newest date that deploys; re-test the boundary before raising it.
 | Path                               | Role                                                            |
 | ---------------------------------- | --------------------------------------------------------------- |
 | [`src/entry.py`](src/entry.py)     | `scheduled` (cron) and `fetch` (ad-hoc, token-guarded) handlers |
-| `src/config.yml`                   | Symlink to `instance/config.yml`, bundled with the Worker       |
-| [`wrangler.jsonc`](wrangler.jsonc) | Cron schedule, R2 binding, module rules                         |
+| [`src/config.yml`](src/config.yml) | The Worker's config, tracked and bundled with it                |
+| [`wrangler.jsonc`](wrangler.jsonc) | Cron schedule, R2 binding, module rules, the domain to deploy to |
 | [`pyproject.toml`](pyproject.toml) | One project for all three run modes, see below                  |
 | [`package.json`](package.json)     | Pins wrangler, and defines every `npm run` script               |
 

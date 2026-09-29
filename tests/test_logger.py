@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 
-from ansibleinventorycmdb import create_app
+from ansibleinventorycmdb.app import create_app
 from ansibleinventorycmdb.config import Config
 
 if TYPE_CHECKING:

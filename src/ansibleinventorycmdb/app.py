@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
@@ -12,14 +13,14 @@ from fastapi.staticfiles import StaticFiles
 from .cmdb import AnsibleCMDB
 from .config import Config, get_instance_path, load_config
 from .constants import PROGRAM_NAME_WITH_VERSION, PROGRAM_VERSION
-from .logger import LoggingConfig, get_logger, setup_logger
+from .logger import LoggingConfig, setup_logger
 from .routes import HTMLError, html_error_handler, refresh_cmdb, router
 from .site import STATIC_DIR
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-_logger = get_logger(__name__)
+_logger = logging.getLogger(__name__)
 
 
 @contextlib.asynccontextmanager
@@ -49,7 +50,7 @@ def create_app(config: Config | None = None, instance_path: str | None = None) -
 
     app.state.config = config
     app.state.instance_path = instance_path
-    app.state.cmdb = AnsibleCMDB(config.cmdb, instance_path)
+    app.state.cmdb = AnsibleCMDB(config.cmdb)
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(router)

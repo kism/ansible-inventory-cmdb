@@ -6,7 +6,7 @@ import os
 import pytest
 from pydantic import ValidationError
 
-from ansibleinventorycmdb import create_app
+from ansibleinventorycmdb.app import create_app
 from ansibleinventorycmdb.config import Config, load_config
 
 

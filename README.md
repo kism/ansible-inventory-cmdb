@@ -22,14 +22,14 @@ and the Cloudflare Worker (see below).
 
 ```bash
 uv sync --extra server
-uv run uvicorn ansibleinventorycmdb:create_app --factory --reload --port 5100
+uv run uvicorn ansibleinventorycmdb.app:create_app --factory --reload --port 5100
 ```
 
 ### Run Prod
 
 ```bash
 uv sync --extra server --no-dev
-.venv/bin/uvicorn ansibleinventorycmdb:create_app \
+.venv/bin/uvicorn ansibleinventorycmdb.app:create_app \
     --factory \
     --host 127.0.0.1 \
     --port 5000 \
@@ -69,9 +69,12 @@ Config is read from the first of these that exists:
 2. `~/.config/ansibleinventorycmdb/config.yml`
 3. `/etc/ansibleinventorycmdb/config.yml`
 
-The instance path defaults to `./instance` and can be overridden with `AIC_INSTANCE_PATH`. It also holds
-`cmdb_dump.yml` (the parsed inventory) and `url_cache.pkl` (the fetched YAML). If no config file is found anywhere,
-one is written with defaults at location 1.
+The instance path defaults to `./instance` and can be overridden with `AIC_INSTANCE_PATH`. Config is the only
+thing kept there — the inventory lives in memory and is re-fetched on every build. If no config file is found
+anywhere, one is written with defaults at location 1.
+
+The Cloudflare Worker is the exception: it has no instance path at runtime, so it reads
+[`src/config.yml`](src/config.yml), which is tracked and bundled with it. Same schema.
 
 ```yaml
 cmdb:
