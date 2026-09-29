@@ -48,7 +48,7 @@ src layout, installed as a package (hatchling). Imports are `ansibleinventorycmd
 | [`src/ansibleinventorycmdb/__main__.py`](src/ansibleinventorycmdb/__main__.py) | `main()`, the `ansibleinventorycmdb` console script, runs uvicorn                 |
 | [`src/ansibleinventorycmdb/routes.py`](src/ansibleinventorycmdb/routes.py)     | `APIRouter`, templates, the `HTMLError` page handler, and the CMDB refresh loop   |
 | [`src/ansibleinventorycmdb/site.py`](src/ansibleinventorycmdb/site.py)        | Static site renderer, shared by the routes and the Worker. No FastAPI imports     |
-| [`src/ansibleinventorycmdb/cmdb.py`](src/ansibleinventorycmdb/cmdb.py)         | `AnsibleCMDB`: fetches inventory URLs, parses hosts/groups/vars, pickle URL cache |
+| [`src/ansibleinventorycmdb/cmdb.py`](src/ansibleinventorycmdb/cmdb.py)         | `AnsibleCMDB`: fetches inventory URLs, parses hosts/groups/vars, per-build URL cache |
 | [`src/ansibleinventorycmdb/config.py`](src/ansibleinventorycmdb/config.py)     | pydantic `Config`/`Inventory` models and `load_config()`                          |
 | [`src/ansibleinventorycmdb/logger.py`](src/ansibleinventorycmdb/logger.py)     | `LoggingConfig` and `setup_logger`: one console handler, optionally a file one     |
 | [`src/entry.py`](src/entry.py)                                                | The Cloudflare Worker's entrypoint. Not part of the package, see below           |
@@ -181,7 +181,7 @@ extras and dependency-groups are invisible to it — and compiles that list agai
   difference is whether the error renders as HTML or JSON.
 - Page routes signal errors by raising `HTMLError(message, status)`, which `html_error_handler` renders with
   `error.html.j2`. JSON routes raise a plain `HTTPException`.
-- `logger` in `__init__.py` is named `_logger`, because `ansibleinventorycmdb.logger` is a submodule.
+- `logger` in `app.py` is named `_logger`, because `ansibleinventorycmdb.logger` is a submodule.
 
 ### Fetching
 
@@ -194,7 +194,7 @@ read the already-built in-memory dicts — they never fetch.
   runtime's `fetch` instead, which is the path that's actually been run in a Worker. `httpx` is imported inside
   `httpx_fetcher`, so the Worker never loads it.
 - **`github_zip_fetcher` is what keeps the Worker under the free plan's subrequest limit.** A build probes every
-  host and group at two paths, ~81 requests for the real inventory, and the free plan allows **50 external
+  host and group at two paths, ~80 requests for the real inventory, and the free plan allows **50 external
   subrequests per invocation** — that's the `Too many subrequests` exception. It serves
   `raw.githubusercontent.com` URLs out of one `codeload.github.com` zip per repo instead, so a build costs one
   external subrequest. The R2 puts don't compete with it: requests to Cloudflare services have their own 1000
@@ -211,8 +211,6 @@ read the already-built in-memory dicts — they never fetch.
   an asyncio primitive binds to the loop that first awaits it. A semaphore rather than a client-level connection
   limit, because the client isn't in the picture on the Worker's path. Raising it hammers whatever hosts the
   inventory.
-- The URL cache and the dump are written once at the end of `build()`, via `asyncio.to_thread`. Don't move the cache
-  write back into `_get_yaml` — concurrent fetches would race the same file.
 - **`AnsibleCMDB` writes nothing to disk, in any mode.** `url_cache` dedupes fetches *within* one build — a
   group's vars file is otherwise probed once per host in it — and is dropped after. There used to be a pickled
   `url_cache.pkl` and a `cmdb_dump.yml` under the instance path; don't reintroduce either. Nothing read the dump,

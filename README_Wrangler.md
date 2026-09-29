@@ -7,8 +7,9 @@ templates — see [`site.py`](src/ansibleinventorycmdb/site.py), which both mode
 This file is the deployment guide. For local development, the project layout and how the dependency list works,
 see [README_Wrangler_dev.md](README_Wrangler_dev.md).
 
-Requires **Workers Paid**. Building the real inventory takes ~75 subrequests (one per host and group var file,
-times two paths), over the free plan's cap of 50.
+Runs on the **free plan**. A build probes every host and group at two paths — ~80 URLs for the real inventory,
+well over the free plan's cap of 50 external subrequests — so GitHub-hosted inventories are served out of one
+repo zip per build instead. See `github_zip_fetcher` in [`cmdb.py`](src/ansibleinventorycmdb/cmdb.py).
 
 ## Deploy
 
@@ -47,7 +48,7 @@ for the same reason: a checkout with no config produces a bundle that dies on im
 
 The cron trigger fires daily at 14:00 UTC. **Nothing else fires it**: deploying doesn't, and a deployed cron
 trigger cannot be dispatched by hand — `wrangler dev --remote` returns error 1042 rather than sending one. That
-is why the Worker also answers `POST /refresh`, token-guarded, and why a fresh deploy leaves the bucket 404ing
+is why the Worker also answers `/refresh`, token-guarded, and why a fresh deploy leaves the bucket 404ing
 until you use it.
 
 [`scripts/build-token.sh`](scripts/build-token.sh) is that endpoint's front end:
@@ -76,8 +77,8 @@ The trade is that the token then sits in your browser history and Cloudflare's r
 the header form, or put the Worker on a custom domain behind
 [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/access-controls/) and drop the token.
 
-The guard itself is not optional. The `workers.dev` URL is public and each build costs ~75 requests against
-whatever hosts your inventory, so an open endpoint is a free way for anyone to hammer that server. It **fails
+The guard itself is not optional. The `workers.dev` URL is public and each build pulls a whole repo down from
+whoever hosts your inventory, so an open endpoint is a free way for anyone to hammer that server. It **fails
 closed** — no `BUILD_TOKEN`, no way in — and a wrong token gets a 404 rather than a 403, the same answer as any
 path that isn't `/refresh` or `/status`, so nothing advertises itself.
 

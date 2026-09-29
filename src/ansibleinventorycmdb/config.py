@@ -42,7 +42,7 @@ class Config(BaseModel):
 
 
 def get_instance_path() -> str:
-    """Directory for config.yml, the cmdb dump and the url cache."""
+    """Directory config.yml is looked for in first."""
     return os.environ.get("AIC_INSTANCE_PATH", os.path.join(os.getcwd(), "instance"))
 
 
