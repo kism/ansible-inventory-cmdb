@@ -133,6 +133,11 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying) and
   with: newer than that and `npm run dev` won't start. The date also picks the Pyodide index the wheels come
   from, so after changing it delete `pylock.toml` (it pins the old ones), run `uv run pywrangler sync --force`,
   and re-run `npm run check_worker`.
+- **The same `ModuleNotFoundError: No module named 'yaml'` also means `python_modules/` wasn't there.** It is
+  gitignored and written by `pywrangler sync`, which `npm run deploy` runs first; a git-connected Workers Builds
+  deploy left on the stock `npx wrangler deploy` skips it, and wrangler then ships a bundle with **no** vendored
+  packages rather than erroring (the missing directory is a debug-level log line). Tell the two causes apart by
+  `Total Upload`: ~8 MB with the packages, a few hundred KiB without. Build settings in README_Wrangler.md.
 - Trigger a local run with `curl http://localhost:8787/cdn-cgi/handler/scheduled`. A *deployed* cron trigger can't
   be fired on demand — `wrangler dev --remote` returns error 1042 rather than dispatching one — which is why
   `entry.py` has a `fetch` handler as well. Both handlers call `_build_and_upload`; keep it that way so the

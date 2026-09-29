@@ -44,6 +44,23 @@ runtime, and `wrangler.jsonc`'s `Data` rules carry `*.yml` into the bundle. It i
 for the same reason: a checkout with no config produces a bundle that dies on import with
 `FileNotFoundError: /session/metadata/config.yml`. It is not secret — the whole site it renders is public.
 
+### Deploying from Workers Builds
+
+Connecting the repo to Workers Builds (Cloudflare's git integration) needs both commands set, because the
+defaults don't work here:
+
+| Setting        | Value                          |
+| -------------- | ------------------------------ |
+| Build command  | `pipx install uv`              |
+| Deploy command | `npm run deploy`               |
+
+`python_modules/` is gitignored — `pywrangler sync` writes it, and `npm run deploy` goes through pywrangler,
+which syncs first. The stock deploy command `npx wrangler deploy` skips that step, so on a fresh checkout it
+uploads a bundle with **no vendored packages at all** and the deploy is rejected at validation with
+`ModuleNotFoundError: No module named 'yaml'` — `entry.py`'s first vendored import. Nothing warns you: the
+missing `python_modules/` is a debug-level log line, and the only visible symptom is `Total Upload` being a few
+hundred KiB instead of ~8 MB. The build image has no `uv`, hence the build command.
+
 ## Running a build
 
 The cron trigger fires daily at 14:00 UTC. **Nothing else fires it**: deploying doesn't, and a deployed cron
