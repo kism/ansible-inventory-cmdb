@@ -61,5 +61,10 @@
 	],
 	"observability": {
 		"enabled": true
-	}
+	},
+  "previews": {
+    "vars": {
+      "COMMIT_SHA": ""
+    }
+  }
 }
