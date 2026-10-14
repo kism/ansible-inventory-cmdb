@@ -4,6 +4,12 @@
 	// base_dir defaults to the entrypoint's directory, so src/ansibleinventorycmdb is already bundled as a sibling
 	// of entry.py, exactly as it is imported. Nothing needs copying in.
 	"main": "src/entry.py",
+	// Vendors the Python deps into python_modules/ before every bundle. pywrangler dev/deploy already do this, but
+	// a plain `npx wrangler ...` (Workers Builds' `wrangler preview` for PR builds) doesn't, and wrangler then
+	// silently ships a bundle with no packages: `ModuleNotFoundError: No module named 'yaml'` on upload.
+	"build": {
+		"command": "uv run pywrangler sync"
+	},
 	// This date picks the edge's Python runtime, and it has a floor as well as a ceiling:
 	//   - 2026-09-08 or later => Python 3.14 (pywrangler's metadata.py maps date -> version). Anything
 	//     older lands on the 3.13 runtime, which does not put the bundled `python_modules` on sys.path:
