@@ -5,9 +5,8 @@ appear in other objects, and a missing one is just a 404. test_every_reference_r
 """
 
 import asyncio
-import datetime
 import json
-from datetime import UTC, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from ansibleinventorycmdb.api import api_status, render_api
@@ -75,7 +74,7 @@ def test_dates_serialise():
         "x": {
             "url": "https://a.internal/inventory/main.yml",
             "base_url": "https://a.internal",
-            "hosts": {"h": {"groups": ["g"], "vars": {"when": datetime.date(2024, 1, 2)}}},
+            "hosts": {"h": {"groups": ["g"], "vars": {"when": date(2024, 1, 2)}}},
             "groups": {"g": {}},
         }
     }
@@ -90,8 +89,8 @@ def test_dates_serialise():
 def test_api_status():
     """Not built yet, fresh and stale."""
     assert api_status(None, 60) == {"ok": False, "last_build": None, "age_seconds": None, "stale_after_seconds": 60}
-    assert api_status(datetime.datetime.now(UTC), 60)["ok"]
-    assert not api_status(datetime.datetime.now(UTC) - timedelta(seconds=61), 60)["ok"]
+    assert api_status(datetime.now(UTC), 60)["ok"]
+    assert not api_status(datetime.now(UTC) - timedelta(seconds=61), 60)["ok"]
 
 
 def test_build_uses_the_supplied_fetcher(get_test_config):
