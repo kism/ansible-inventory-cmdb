@@ -1,73 +1,69 @@
 {
-	"$schema": "./node_modules/wrangler/config-schema.json",
-	"name": "ansible-inventory-cmdb",
-	// base_dir defaults to the entrypoint's directory, so src/ansibleinventorycmdb is already bundled as a sibling
-	// of entry.py, exactly as it is imported. Nothing needs copying in.
-	"main": "src/entry.py",
-	// Vendors the Python deps into python_modules/ before every bundle. pywrangler dev/deploy already do this, but
-	// a plain `npx wrangler ...` (Workers Builds' `wrangler preview` for PR builds) doesn't, and wrangler then
-	// silently ships a bundle with no packages: `ModuleNotFoundError: No module named 'yaml'` on upload.
-	"build": {
-		"command": "uv run pywrangler sync"
-	},
-	// This date picks the edge's Python runtime, and it has a floor as well as a ceiling:
-	//   - 2026-09-08 or later => Python 3.14 (pywrangler's metadata.py maps date -> version). Anything
-	//     older lands on the 3.13 runtime, which does not put the bundled `python_modules` on sys.path:
-	//     the deploy is rejected with `ModuleNotFoundError` on the first vendored import, while
-	//     `npm run dev` boots fine. Don't lower this.
-	//   - newer than the workerd binary wrangler ships with => `pywrangler dev` refuses to start
-	// Changing it changes which Pyodide index the wheels come from, so re-run `uv run pywrangler sync
-	// --force` (delete pylock.toml first, it pins the old ones) and `npm run check_worker` after.
-	"compatibility_date": "2026-09-08",
-	"compatibility_flags": [
-		"python_workers"
-	],
-	// Without these only .py files are bundled, and the templates, CSS and fonts would silently go missing.
-	"rules": [
-		{
-			"type": "Data",
-			"globs": [
-				"**/*.j2",
-				"**/*.yml",
-				"**/*.css",
-				"**/*.js",
-				"**/*.woff2",
-				"**/*.ico",
-				"**/*.png",
-				"**/*.webmanifest",
-				"**/*.txt"
-			],
-			"fallthrough": true
-		}
-	],
-	// The commit the bundle was built from, shown in the page footer. Empty here on purpose: `npm run deploy`
-	// overrides it with `--var COMMIT_SHA:$(git rev-parse --short HEAD)`, so a `pywrangler deploy` run by hand
-	// just gets no sha rather than a stale one.
-	"vars": {
-		"COMMIT_SHA": ""
-	},
-	// Daily at 14:00 UTC. Cron Triggers always run on UTC.
-	"triggers": {
-		"crons": [
-			"0 14 * * *"
-		]
-	},
-	// This, the cron above and src/config.yml are the whole deployment. Forking to run your own? Change the
-	// bucket name here, the domain in package.json's `domain` script, and the inventories in src/config.yml.
-	// Create the bucket with `npm run bucket`, then put it on a custom domain with `npm run domain`
-	// (CF_ZONE_ID=<zone id from the domain's dashboard overview>) — https://cmdb.kierangee.au here.
-	// The domain also needs a zone-level URL Rewrite appending index.html to paths ending in `/`; R2 has no
-	// index document and that cannot live here, since requests to the bucket never reach this Worker.
-	// Recipe in README_Wrangler.md.
-	"r2_buckets": [
-		{
-			"binding": "CMDB_BUCKET",
-			"bucket_name": "ansible-inventory-cmdb"
-		}
-	],
-	"observability": {
-		"enabled": true
-	},
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "ansible-inventory-cmdb",
+  // base_dir defaults to the entrypoint's directory, so src/ansibleinventorycmdb is already bundled as a sibling
+  // of entry.py, exactly as it is imported. Nothing needs copying in.
+  "main": "src/entry.py",
+  // Vendors the Python deps into python_modules/ before every bundle. pywrangler dev/deploy already do this, but
+  // a plain `npx wrangler ...` (Workers Builds' `wrangler preview` for PR builds) doesn't, and wrangler then
+  // silently ships a bundle with no packages: `ModuleNotFoundError: No module named 'yaml'` on upload.
+  "build": {
+    "command": "uv run pywrangler sync"
+  },
+  // This date picks the edge's Python runtime, and it has a floor as well as a ceiling:
+  //   - 2026-09-08 or later => Python 3.14 (pywrangler's metadata.py maps date -> version). Anything
+  //     older lands on the 3.13 runtime, which does not put the bundled `python_modules` on sys.path:
+  //     the deploy is rejected with `ModuleNotFoundError` on the first vendored import, while
+  //     `pnpm dev` boots fine. Don't lower this.
+  //   - newer than the workerd binary wrangler ships with => `pywrangler dev` refuses to start
+  // Changing it changes which Pyodide index the wheels come from, so re-run `uv run pywrangler sync
+  // --force` (delete pylock.toml first, it pins the old ones) and `pnpm check_worker` after.
+  "compatibility_date": "2026-09-08",
+  "compatibility_flags": ["python_workers"],
+  // Without these only .py files are bundled, and the templates, CSS and fonts would silently go missing.
+  "rules": [
+    {
+      "type": "Data",
+      "globs": [
+        "**/*.j2",
+        "**/*.yml",
+        "**/*.css",
+        "**/*.js",
+        "**/*.woff2",
+        "**/*.ico",
+        "**/*.png",
+        "**/*.webmanifest",
+        "**/*.txt"
+      ],
+      "fallthrough": true
+    }
+  ],
+  // The commit the bundle was built from, shown in the page footer. Empty here on purpose: `pnpm run deploy`
+  // overrides it with `--var COMMIT_SHA:$(git rev-parse --short HEAD)`, so a `pywrangler deploy` run by hand
+  // just gets no sha rather than a stale one.
+  "vars": {
+    "COMMIT_SHA": ""
+  },
+  // Daily at 14:00 UTC. Cron Triggers always run on UTC.
+  "triggers": {
+    "crons": ["0 14 * * *"]
+  },
+  // This, the cron above and src/config.yml are the whole deployment. Forking to run your own? Change the
+  // bucket name here, the domain in package.json's `domain` script, and the inventories in src/config.yml.
+  // Create the bucket with `pnpm bucket`, then put it on a custom domain with `pnpm domain`
+  // (CF_ZONE_ID=<zone id from the domain's dashboard overview>) — https://cmdb.kierangee.au here.
+  // The domain also needs a zone-level URL Rewrite appending index.html to paths ending in `/`; R2 has no
+  // index document and that cannot live here, since requests to the bucket never reach this Worker.
+  // Recipe in README_Wrangler.md.
+  "r2_buckets": [
+    {
+      "binding": "CMDB_BUCKET",
+      "bucket_name": "ansible-inventory-cmdb"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
   "previews": {
     "vars": {
       "COMMIT_SHA": ""

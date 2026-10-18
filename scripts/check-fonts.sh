@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Every woff2 zy.css references must exist and actually be a woff2. Catches the one failure mode here: adding a
-# weight to zy.css, or bumping a @fontsource package, without re-running `npm run fonts` (scripts/fetch-fonts.sh).
+# weight to zy.css, or bumping a @fontsource package, without re-running `pnpm fonts` (scripts/fetch-fonts.sh).
 # The rules are read off the stylesheet, so adding a weight needs no change in this file.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."

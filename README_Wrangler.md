@@ -18,21 +18,22 @@ parameters you pass in — [`src/config.yml`](src/config.yml) holds the inventor
 [`wrangler.jsonc`](wrangler.jsonc) the bucket, cron and domain. To run your own, fork it and change those; there
 are only three edits, and `wrangler.jsonc`'s comments name them.
 
-Every Cloudflare command is an `npm run` script in [`package.json`](package.json), so there is nothing to install
-globally and nothing to remember about flags. Run them from the repo root — there is one `pyproject.toml`, and
+Every Cloudflare command is a pnpm script in [`package.json`](package.json), so there is nothing to install
+globally and nothing to remember about flags. `deploy` and `login` share their names with pnpm built-ins, so they
+need the `run`: `pnpm run deploy`, not `pnpm deploy`. Run them from the repo root — there is one `pyproject.toml`, and
 pywrangler insists on finding `wrangler.jsonc` beside it.
 
 ```bash
 uv sync
-nvm install                             # node 26, from .nvmrc
-npm install
-npm run login
-npm run bucket                          # create the R2 bucket
-CF_ZONE_ID=<zone id> npm run domain     # put it on cmdb.kierangee.au, see URLs below
-$EDITOR src/config.yml                  # your inventories, if this is a fork
-npm run deploy
-./scripts/build-token.sh set            # the on-demand build endpoint, see below
-./scripts/build-token.sh run            # seed the bucket now, rather than waiting for 14:00 UTC
+nvm install                          # node 26, from .nvmrc
+pnpm install
+pnpm run login
+pnpm bucket                          # create the R2 bucket
+CF_ZONE_ID=<zone id> pnpm domain     # put it on cmdb.kierangee.au, see URLs below
+$EDITOR src/config.yml               # your inventories, if this is a fork
+pnpm run deploy
+./scripts/build-token.sh set         # the on-demand build endpoint, see below
+./scripts/build-token.sh run         # seed the bucket now, rather than waiting for 14:00 UTC
 ```
 
 The zone ID is on the domain's dashboard overview page. Skipping the custom domain works too — enable the `r2.dev`
@@ -49,12 +50,12 @@ for the same reason: a checkout with no config produces a bundle that dies on im
 Connecting the repo to Workers Builds (Cloudflare's git integration) needs both commands set, because the
 defaults don't work here:
 
-| Setting        | Value                          |
-| -------------- | ------------------------------ |
-| Build command  | `pipx install uv`              |
-| Deploy command | `npm run deploy`               |
+| Setting        | Value             |
+| -------------- | ----------------- |
+| Build command  | `pipx install uv` |
+| Deploy command | `pnpm run deploy` |
 
-`python_modules/` is gitignored — `pywrangler sync` writes it, and `npm run deploy` goes through pywrangler,
+`python_modules/` is gitignored — `pywrangler sync` writes it, and `pnpm run deploy` goes through pywrangler,
 which syncs first. The stock deploy command `npx wrangler deploy` skips that step, so on a fresh checkout it
 uploads a bundle with **no vendored packages at all** and the deploy is rejected at validation with
 `ModuleNotFoundError: No module named 'yaml'` — `entry.py`'s first vendored import. Nothing warns you: the
@@ -101,7 +102,7 @@ path that isn't `/refresh` or `/status`, so nothing advertises itself.
 
 ## Checking the last run
 
-`npm run tail` only streams what happens while you're attached; wrangler has no historical log query. The Worker
+`pnpm tail` only streams what happens while you're attached; wrangler has no historical log query. The Worker
 answers `/status` instead — no token needed, it only reports what a public bucket already shows:
 
 ```bash
@@ -130,9 +131,9 @@ written as `<path>/index.html` and linked that way; bare `/` and `/inventory/x/`
 and 404.
 
 A **URL Rewrite** on the zone in front of the bucket fixes it — a rewrite rather than a redirect, so the address
-bar keeps the clean path. It is the one piece of the deployment that `npm run domain` and `wrangler.jsonc` can't
+bar keeps the clean path. It is the one piece of the deployment that `pnpm domain` and `wrangler.jsonc` can't
 express: the Worker only _writes_ objects on its cron trigger, and requests to the bucket's domain go straight to
-R2 without reaching it. Being zone config, it does **not** travel with `npm run deploy`; a new bucket or domain
+R2 without reaching it. Being zone config, it does **not** travel with `pnpm run deploy`; a new bucket or domain
 needs it again.
 
 In the dashboard, **Rules → Overview → Create rule → URL Rewrite Rule**, leaving _Query_ alone:

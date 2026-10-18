@@ -1,8 +1,9 @@
 # ansibleinventorycmdb
 
-[![Check](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/check.yml/badge.svg)](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/check.yml)
-[![Type](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/check_types.yml/badge.svg)](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/check_types.yml)
+[![Lint](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/lint.yml/badge.svg)](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/lint.yml)
+[![Type Check](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/check_types.yml/badge.svg)](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/check_types.yml)
 [![Test](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/test.yml/badge.svg)](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/test.yml)
+[![Build](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/build.yml/badge.svg)](https://github.com/kism/ansible-inventory-cmdb/actions/workflows/build.yml)
 [![codecov](https://codecov.io/gh/kism/ansible-inventory-cmdb/graph/badge.svg?token=yA1IpJESD1)](https://codecov.io/gh/kism/ansible-inventory-cmdb)
 
 Presents an internet hosted Ansible inventory as a nice webpage. No database, the inventory is fetched over HTTP
@@ -11,7 +12,9 @@ directory, or a cron-triggered Cloudflare Worker that renders into an R2 bucket.
 
 ## Prerequisites
 
-Install uv <https://docs.astral.sh/uv/getting-started/installation/>
+- [uv](https://docs.astral.sh/uv/getting-started/installation/)
+- For the Worker and the dev tooling: Node, the version in `.nvmrc` (`nvm use`), and
+  [pnpm](https://pnpm.io/installation) (`npm i -g pnpm`). The version is pinned in `packageManager` in `package.json`
 
 ## Run
 
@@ -45,7 +48,7 @@ There is also a console script, `ansibleinventorycmdb`, which serves on `AIC_HOS
 `AIC_PORT` (default `5100`).
 
 Set `AIC_COMMIT_SHA` to have the page footer name the commit the deployment was built from — there is no `.git`
-to read one out of once the package is installed. `npm run deploy` does the equivalent for the Cloudflare Worker,
+to read one out of once the package is installed. `pnpm run deploy` does the equivalent for the Cloudflare Worker,
 passing `--var COMMIT_SHA:$(git rev-parse --short HEAD)`.
 
 ### Run without a server
@@ -90,3 +93,34 @@ logging:
 
 Config is validated with pydantic and unknown keys are rejected, so a typo fails at startup rather than being
 silently ignored.
+
+## Development
+
+```bash
+uv sync && pnpm install
+pnpm lint                    # biome, ruff check, ruff format --check (pnpm format to fix)
+pnpm typecheck               # ty
+pnpm test                    # pytest, args pass through: pnpm test -k name
+pnpm coverage                # pytest under coverage
+pnpm check_fonts             # every woff2 zy.css references exists
+pnpm check_worker            # boots the Worker under Pyodide, see README_Wrangler_dev.md
+```
+
+`scripts/run-ci-local.sh` runs everything the workflows do, in order, and formats while it's at it.
+
+## Workflows
+
+The `.github` folder has one workflow per check, so a failing badge tells you what broke:
+
+| Workflow          | Runs                                                       |
+| ----------------- | ---------------------------------------------------------- |
+| `lint.yml`        | Ruff and Biome                                             |
+| `check_types.yml` | ty                                                         |
+| `test.yml`        | pytest with coverage, uploaded to Codecov                  |
+| `build.yml`       | `scripts/check-fonts.sh`, and `pnpm check_worker`          |
+
+Dependabot PRs are merged automatically once checks pass (`dependabot_automerge.yml`).
+
+### Codecov
+
+The Test workflow uploads with OIDC, so no token secret is needed.

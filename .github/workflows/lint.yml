@@ -1,0 +1,59 @@
+---
+name: Lint
+
+on:
+  push:
+    branches:
+      - main
+      - test
+    paths-ignore: &paths-ignore
+      - "**/README*"
+      - ".github/workflows/check_types.yml"
+      - ".github/workflows/test.yml"
+      - ".github/workflows/build.yml"
+  pull_request:
+    paths-ignore: *paths-ignore
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ruff:
+    name: Ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Lint
+        uses: astral-sh/ruff-action@v3
+
+      - name: Format
+        uses: astral-sh/ruff-action@v3
+        with:
+          args: format --check
+
+  biome:
+    name: Biome
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6 # Version comes from packageManager in package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm exec biome check

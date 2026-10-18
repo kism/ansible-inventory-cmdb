@@ -5,6 +5,12 @@
         "source": "github",
         "repo": "astral-sh/claude-code-plugins"
       }
+    },
+    "ponytail": {
+      "source": {
+        "source": "github",
+        "repo": "DietrichGebert/ponytail"
+      }
     }
   },
   "enabledPlugins": {

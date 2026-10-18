@@ -1,25 +1,27 @@
 {
   "name": "ansible-inventory-cmdb",
   "private": true,
-  "description": "Every Cloudflare command for this project is an npm script here. wrangler is pinned below so it needs no global install; dev/deploy go through pywrangler because the Worker is Python.",
+  "packageManager": "pnpm@12.11.2",
   "scripts": {
+    "lint": "biome check && uv run ruff check && uv run ruff format --check",
+    "format": "biome check --write && uv run ruff format && uv run ruff check --fix",
+    "typecheck": "uv run ty check",
+    "test": "uv run pytest",
+    "coverage": "uv run coverage run && uv run coverage report",
     "fonts": "scripts/fetch-fonts.sh",
     "check_fonts": "scripts/check-fonts.sh",
     "check_worker": "scripts/check-worker.sh",
-    "login": "npx wrangler login --browser false",
-    "bucket": "npx wrangler r2 bucket create ansible-inventory-cmdb",
-    "domain": "npx wrangler r2 bucket domain add ansible-inventory-cmdb --domain cmdb.kierangee.au --zone-id $CF_ZONE_ID --min-tls 1.2",
-    "tail": "npx wrangler tail --format pretty",
+    "login": "wrangler login --browser false",
+    "bucket": "wrangler r2 bucket create ansible-inventory-cmdb",
+    "domain": "wrangler r2 bucket domain add ansible-inventory-cmdb --domain cmdb.kierangee.au --zone-id $CF_ZONE_ID --min-tls 1.2",
+    "tail": "wrangler tail --format pretty",
     "dev": "uv run pywrangler dev",
     "deploy": "uv run pywrangler deploy --var COMMIT_SHA:$(git rev-parse --short HEAD)"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
     "@fontsource/fira-code": "^5.3.0",
     "@fontsource/noto-sans-display": "^5.3.0",
-    "wrangler": "^4.149.0"
-  },
-  "allowScripts": {
-    "esbuild": true,
-    "workerd": true
+    "wrangler": "^4.151.0"
   }
 }

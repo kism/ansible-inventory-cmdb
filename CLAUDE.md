@@ -6,18 +6,25 @@ Presents Ansible inventories as a CMDB (Configuration Management Database) webpa
 ## Setup
 
 ```bash
-uv sync                # Cloudflare Worker and static-site modes
-uv sync --extra server # ...plus the FastAPI web app
-nvm install            # node 26, from .nvmrc
-npm install            # wrangler, pinned in package.json
-npm run fonts          # copies static/fonts from the @fontsource packages, see below
+uv sync                     # Cloudflare Worker and static-site modes
+uv sync --extra server      # ...plus the FastAPI web app
+nvm install                 # node 26, from .nvmrc
+pnpm install                # wrangler and biome, pinned in package.json; pnpm itself is pinned by packageManager
+pnpm fonts                  # copies static/fonts from the @fontsource packages, see below
 scripts/build-token.sh set  # BUILD_TOKEN, needed before the Worker's /refresh endpoint works
 ```
 
-**Every Cloudflare command is an `npm run` script** in `package.json` — `login`, `bucket`, `domain`, `dev`,
-`deploy`, `tail`. `npx wrangler` and `uv run pywrangler` are what those scripts call; don't put them in docs or suggest
-them to the user. `pywrangler` proxies any subcommand it doesn't handle straight to `npx wrangler`, and syncs
-`python_modules` first for `dev`/`deploy` — the reason those two don't go through `npx` directly.
+**Every command is a pnpm script** in `package.json`: the Python checks (`lint`, `format`, `typecheck`, `test`,
+`coverage`) wrap `uv run`, and the Cloudflare ones (`login`, `bucket`, `domain`, `dev`, `deploy`, `tail`) wrap
+wrangler. `wrangler` and `uv run pywrangler` are what those scripts call; don't put them in docs or suggest them to
+the user. `pywrangler` proxies any subcommand it doesn't handle straight to `npx wrangler`, and syncs
+`python_modules` first for `dev`/`deploy` — the reason those two don't call wrangler directly.
+
+**`deploy` and `login` are pnpm built-ins**, so they must be run as `pnpm run deploy` / `pnpm run login`; a bare
+`pnpm deploy` runs pnpm's own workspace deploy instead. Every other script works as `pnpm <name>`.
+
+pnpm only runs dependency install scripts approved in `pnpm-workspace.yaml` (`allowBuilds`). If a new dependency
+needs one, `pnpm install` stops and names it; approve it with `pnpm approve-builds <package>`.
 
 One `pyproject.toml` covers all three modes. **`[project.dependencies]` is the Worker's install list** — pywrangler
 reads it and nothing else (no extras, no dependency-groups) and resolves it against the Pyodide index, so anything
@@ -25,17 +32,22 @@ the Worker can't run belongs in the `server` extra. See *Dependency layout* belo
 
 ## Essential Commands
 
-| Task                    | Command                                                                |
-| ----------------------- | ---------------------------------------------------------------------- |
-| Run tests               | `uv run pytest`                                                        |
-| Run tests with coverage | `uv run coverage run && uv run coverage report`                        |
-| Lint                    | `uv run ruff check src tests`                                          |
-| Format                  | `uv run ruff format src tests`                                         |
-| Type check              | `uv run ty check`                                                      |
-| Render the static site  | `uv run ansibleinventorycmdb-generate <output dir>`                    |
+| Task                    | Command                                                                    |
+| ----------------------- | -------------------------------------------------------------------------- |
+| Run tests               | `pnpm test` (args go to pytest: `pnpm test -k name`)                       |
+| Run tests with coverage | `pnpm coverage`                                                            |
+| Lint                    | `pnpm lint` (biome, ruff check, ruff format --check)                       |
+| Format                  | `pnpm format` (biome --write, ruff format, ruff check --fix)               |
+| Type check              | `pnpm typecheck`                                                           |
+| Everything CI runs      | `scripts/run-ci-local.sh`                                                  |
+| Render the static site  | `uv run ansibleinventorycmdb-generate <output dir>`                        |
 | Dev server              | `uv run uvicorn ansibleinventorycmdb.app:create_app --factory --port 5100` |
-| Worker dev / deploy     | `npm run dev` / `npm run deploy` (from the repo root)                  |
-| Check the Worker boots  | `npm run check_worker` (from the repo root)                            |
+| Worker dev / deploy     | `pnpm dev` / `pnpm run deploy` (from the repo root)                        |
+| Check the Worker boots  | `pnpm check_worker` (from the repo root)                                   |
+
+Biome lints and formats the non-Python files — `sorttable.js`, `zy.css`, the JSON(C) — with the same 120 columns
+as ruff. CI has one workflow per check (`lint.yml`, `check_types.yml`, `test.yml`, `build.yml`), so a failing badge
+names what broke; `build.yml` is the fonts check and `check_worker`.
 
 ## Architecture
 
@@ -59,11 +71,11 @@ paths resolve the inheritance off the same `FileSystemLoader`, so it needs no co
 assets (CSS, JS, fonts, favicon) are in
 [`src/ansibleinventorycmdb/static/`](src/ansibleinventorycmdb/static/), mounted at `/static`.
 
-The `.woff2` files under `static/fonts/` are checked in, but generated: `npm run fonts`
+The `.woff2` files under `static/fonts/` are checked in, but generated: `pnpm fonts`
 ([`scripts/fetch-fonts.sh`](scripts/fetch-fonts.sh)) copies the latin, non-variable weights `zy.css`'s `@font-face`
 rules reference out of the `@fontsource/fira-code`/`@fontsource/noto-sans-display` devDependencies, under the
 existing filenames. Re-run it after bumping either package or adding a weight to `zy.css`; don't hand-edit the
-`.woff2` files. `npm run check_fonts` ([`scripts/check-fonts.sh`](scripts/check-fonts.sh), also a CI job) is what
+`.woff2` files. `pnpm check_fonts` ([`scripts/check-fonts.sh`](scripts/check-fonts.sh), also a CI job) is what
 catches forgetting to: it greps the `url(...)` of every `@font-face` rule out of `zy.css` and checks each file is
 present and starts with the `wOF2` magic number. It reads the paths off the stylesheet rather than a hardcoded
 list, so adding a weight needs no change here. This used to load the sheet in headless chromium via playwright;
@@ -128,13 +140,13 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying) and
   pywrangler's `metadata.py` maps the date to a version: **2026-09-08 or later is Python 3.14**, anything older
   is 3.13. The 3.13 edge runtime does not put the bundled `python_modules` on `sys.path`, so the deploy is
   rejected with `ModuleNotFoundError` on the *first* vendored import (`import yaml`, in `entry.py`) while
-  `npm run dev` boots the same bundle happily — workerd locally is fine with it. That is what the stale
+  `pnpm dev` boots the same bundle happily — workerd locally is fine with it. That is what the stale
   `2026-08-01` pin here caused; don't lower it back. The ceiling is still the workerd binary wrangler ships
-  with: newer than that and `npm run dev` won't start. The date also picks the Pyodide index the wheels come
+  with: newer than that and `pnpm dev` won't start. The date also picks the Pyodide index the wheels come
   from, so after changing it delete `pylock.toml` (it pins the old ones), run `uv run pywrangler sync --force`,
-  and re-run `npm run check_worker`.
+  and re-run `pnpm check_worker`.
 - **The same `ModuleNotFoundError: No module named 'yaml'` also means `python_modules/` wasn't there.** It is
-  gitignored and written by `pywrangler sync`, which `npm run deploy` runs first; a git-connected Workers Builds
+  gitignored and written by `pywrangler sync`, which `pnpm run deploy` runs first; a git-connected Workers Builds
   deploy left on the stock `npx wrangler deploy` skips it, and wrangler then ships a bundle with **no** vendored
   packages rather than erroring (the missing directory is a debug-level log line). Tell the two causes apart by
   `Total Upload`: ~8 MB with the packages, a few hundred KiB without. Build settings in README_Wrangler.md.
@@ -156,9 +168,9 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying) and
   because the bucket is public, and 503 past `STALE_AFTER_SECONDS` so a dumb uptime monitor works. The binding
   returns `uploaded` as a **naive** `datetime` in UTC — `.replace(tzinfo=UTC)`, or subtracting from `now(UTC)`
   raises.
-- wrangler is pinned in `package.json`, not installed globally — run `npm install` at the repo root once.
-  `pywrangler` shells out to `npx wrangler`, which prefers the local copy. Bumping it may require bumping
-  `compatibility_date` too.
+- wrangler is pinned in `package.json`, not installed globally — run `pnpm install` at the repo root once.
+  `pywrangler` shells out to `npx wrangler`, which prefers the copy pnpm links into `node_modules/.bin`. Bumping
+  it may require bumping `compatibility_date` too.
 
 ### Dependency layout
 
@@ -167,11 +179,11 @@ extras and dependency-groups are invisible to it — and compiles that list agai
 `--no-build`. So that list is exactly "what the Worker installs", and it is load-bearing:
 
 - `[project.dependencies]`: `httpx`, `jinja2`, `pydantic`, `pyyaml`. All four have Pyodide wheels. Adding something
-  here without a Pyodide wheel breaks `npm run dev`/`deploy` at the resolve step, not at runtime. So does raising
+  here without a Pyodide wheel breaks `pnpm dev`/`deploy` at the resolve step, not at runtime. So does raising
   a floor past what the index for the current `compatibility_date` serves — `pydantic>=2.11` did exactly that
   back when the 3.13 index stopped at 2.10.6; the 3.14 index serves 2.12.5.
-  `npm run check_worker` ([`scripts/check-worker.sh`](scripts/check-worker.sh), also a CI job) is what catches
-  both: it starts `npm run dev` — which resolves the list, then boots the bundle in workerd — and fails unless an
+  `pnpm check_worker` ([`scripts/check-worker.sh`](scripts/check-worker.sh), also a CI job) is what catches
+  both: it starts `pnpm dev` — which resolves the list, then boots the bundle in workerd — and fails unless an
   untokened `/refresh` comes back 404 and `/status` returns its JSON. Nothing in pytest runs a line of this
   under Pyodide.
 - `[project.optional-dependencies].server`: `fastapi`, `uvicorn`. `uv sync --extra server`. The `test`
@@ -246,7 +258,7 @@ The instance path defaults to `./instance`, overridable with `AIC_INSTANCE_PATH`
 
 `AIC_COMMIT_SHA` is read by `constants.version_string()` for the footer. It is an environment variable rather
 than something read out of `.git`, because the two places the footer is actually seen — an installed wheel and
-the Worker bundle — are just the package's files, with no repo alongside. `npm run deploy` passes the sha as a
+the Worker bundle — are just the package's files, with no repo alongside. `pnpm run deploy` passes the sha as a
 wrangler `--var`, and `entry.py` copies that var into `os.environ` in `_build_and_upload`; a wrangler var only
 exists on `env`, which the runtime hands to a handler, so it can't be picked up at import time.
 

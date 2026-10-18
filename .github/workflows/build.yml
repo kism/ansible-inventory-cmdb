@@ -1,0 +1,61 @@
+---
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      - test
+    paths-ignore: &paths-ignore
+      - "**/README*"
+      - ".github/workflows/lint.yml"
+      - ".github/workflows/check_types.yml"
+      - ".github/workflows/test.yml"
+  pull_request:
+    paths-ignore: *paths-ignore
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fonts:
+    name: Fonts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          lfs: true
+
+      - name: Check every woff2 zy.css references is present and valid
+        run: scripts/check-fonts.sh
+
+  worker:
+    name: Worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.14"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6 # Version comes from packageManager in package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Boot the Worker under Pyodide
+        run: pnpm check_worker

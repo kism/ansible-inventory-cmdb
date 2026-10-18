@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-
+# Everything the workflows in .github/workflows run, in one go
 set -euo pipefail
+cd "$(dirname "$0")/.."
 
 function print_heading() {
     echo
@@ -8,17 +9,17 @@ function print_heading() {
     echo "$1 >>>"
 }
 
-source .venv/bin/activate
+print_heading "Ruff & Biome"
+pnpm format
 
 print_heading "ty"
-ty check
+pnpm typecheck
 
-print_heading "ruff"
-ruff format
-ruff check --fix
+print_heading "pytest"
+pnpm test -q --tb=short
 
-print_heading "PyTest"
-pytest -q --tb=short
+print_heading "Fonts"
+pnpm check_fonts
 
 print_heading "Worker (Pyodide)"
-npm run --silent check_worker
+pnpm check_worker

@@ -5,7 +5,9 @@
   font-family: "Fira Code";
   font-style: normal;
   font-weight: 400;
-  src: local(""), url("/static/fonts/fira-code-400.woff2") format("woff2");
+  src:
+    local(""),
+    url("/static/fonts/fira-code-400.woff2") format("woff2");
 }
 
 /* fira-code-500 - latin */
@@ -13,7 +15,9 @@
   font-family: "Fira Code";
   font-style: normal;
   font-weight: 500;
-  src: local(""), url("/static/fonts/fira-code-500.woff2") format("woff2");
+  src:
+    local(""),
+    url("/static/fonts/fira-code-500.woff2") format("woff2");
 }
 
 /* fira-code-600 - latin */
@@ -21,7 +25,9 @@
   font-family: "Fira Code";
   font-style: normal;
   font-weight: 600;
-  src: local(""), url("/static/fonts/fira-code-600.woff2") format("woff2");
+  src:
+    local(""),
+    url("/static/fonts/fira-code-600.woff2") format("woff2");
 }
 
 /* fira-code-700 - latin */
@@ -29,7 +35,9 @@
   font-family: "Fira Code";
   font-style: normal;
   font-weight: 700;
-  src: local(""), url("/static/fonts/fira-code-700.woff2") format("woff2");
+  src:
+    local(""),
+    url("/static/fonts/fira-code-700.woff2") format("woff2");
 }
 
 /* noto-sans-display-regular-400 - latin */
@@ -37,7 +45,9 @@
   font-family: "Noto Sans Display";
   font-style: normal;
   font-weight: 400;
-  src: local(""), url("/static/fonts/noto-sans-display-latin-400.woff2") format("woff2");
+  src:
+    local(""),
+    url("/static/fonts/noto-sans-display-latin-400.woff2") format("woff2");
 }
 
 /* noto-sans-display-italic-400 - latin */
@@ -45,7 +55,9 @@
   font-family: "Noto Sans Display";
   font-style: italic;
   font-weight: 400;
-  src: local(""), url("/static/fonts/noto-sans-display-latin-400italic.woff2") format("woff2");
+  src:
+    local(""),
+    url("/static/fonts/noto-sans-display-latin-400italic.woff2") format("woff2");
 }
 
 /* noto-sans-display-regular-500 - latin */
@@ -53,7 +65,9 @@
   font-family: "Noto Sans Display";
   font-style: normal;
   font-weight: 500;
-  src: local(""), url("/static/fonts/noto-sans-display-latin-500.woff2") format("woff2");
+  src:
+    local(""),
+    url("/static/fonts/noto-sans-display-latin-500.woff2") format("woff2");
 }
 
 /* noto-sans-display-italic-500 - latin */
@@ -61,7 +75,9 @@
   font-family: "Noto Sans Display";
   font-style: italic;
   font-weight: 500;
-  src: local(""), url("/static/fonts/noto-sans-display-latin-500italic.woff2") format("woff2");
+  src:
+    local(""),
+    url("/static/fonts/noto-sans-display-latin-500italic.woff2") format("woff2");
 }
 
 /* noto-sans-display-regular-600 - latin. Body text is 500, so <b> asking for 700 with nothing above 500
@@ -70,21 +86,17 @@
   font-family: "Noto Sans Display";
   font-style: normal;
   font-weight: 600;
-  src: local(""), url("/static/fonts/noto-sans-display-latin-600.woff2") format("woff2");
+  src:
+    local(""),
+    url("/static/fonts/noto-sans-display-latin-600.woff2") format("woff2");
 }
 
 /* A C T U A L  C S S */
 
-@media screen and (width <= 430px) {
-  body {
-    padding-left: 4px !important;
-    padding-right: 4px !important;
-  }
-}
-
 body {
-  font-family: "Noto Sans Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-    sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  font-family:
+    "Noto Sans Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
   font-size: 18px;
   font-weight: 500;
   background-color: black;
@@ -92,6 +104,13 @@ body {
   line-height: 1.5;
   padding-left: 15px;
   padding-right: 15px;
+}
+
+@media screen and (width <= 430px) {
+  body {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
 }
 
 hr {
@@ -283,7 +302,6 @@ tr {
   border-bottom: 2px solid rgb(255 255 255 / 12%);
   border-right: 0px solid black;
   border-left: 0px solid black;
-  margin-bottom: 8px;
   padding: 8px;
   margin: 8px;
 }
