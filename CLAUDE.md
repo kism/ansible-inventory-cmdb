@@ -166,6 +166,9 @@ and [README_Wrangler_dev.md](README_Wrangler_dev.md) (local dev, layout, depende
   API's is the bucket's custom domain, `pnpm domain`, with a CORS policy from
   [`r2-cors.json`](r2-cors.json) (`pnpm cors`, GET/HEAD from `*`: the data is public, and a named origin would
   also block the frontend's `workers.dev` copy). Page views never run the Python.
+- **`workers_dev` and `preview_urls` are set explicitly** because declaring `routes` silently turns both off — the
+  first deploy with the custom domain did exactly that, and `scripts/build-token.sh`'s `WORKER_URL` stopped
+  resolving. Don't drop them as "defaults".
 - **After the puts, `_prune` deletes every key the build didn't write.** A host dropped from the inventory
   would otherwise keep serving its JSON forever, and the first JSON build cleared out the old HTML site this way.
   It runs after the puts, so a build that died partway has already raised and deleted nothing. Through the

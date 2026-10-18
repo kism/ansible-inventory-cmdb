@@ -51,6 +51,10 @@
   },
   // The frontend's domain. wrangler creates the DNS record; the hostname must not already be in use.
   "routes": [{ "pattern": "cmdb.kierangee.au", "custom_domain": true }],
+  // Both explicit: declaring `routes` turns them off by default. scripts/build-token.sh and the docs reach /refresh
+  // and /status on the workers.dev URL, and Workers Builds' PR previews need preview_urls.
+  "workers_dev": true,
+  "preview_urls": true,
   // The API. This, the route above, the cron, src/config.yml and frontend/.env.cloudflare are the whole
   // deployment. Forking to run your own? Change the bucket name here and in package.json's `bucket`/`domain`/
   // `cors` scripts, both domains, and the inventories in src/config.yml. Create the bucket with `pnpm bucket`,
