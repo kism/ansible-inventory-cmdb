@@ -18,6 +18,10 @@ pnpm typecheck
 print_heading "pytest"
 pnpm test -q --tb=short
 
+print_heading "Frontend"
+pnpm test:frontend
+pnpm build
+
 print_heading "Fonts"
 pnpm check_fonts
 

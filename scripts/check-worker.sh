@@ -2,10 +2,11 @@
 # Boots the Worker for real and checks it answers, which is the only way to find out whether the thing
 # runs under Pyodide/wasm — nothing in pytest touches that path.
 #
-# `pnpm dev` does two checks in one: pywrangler sync resolves [project.dependencies] against the Pyodide
-# index (a dependency with no wasm wheel fails here), then workerd boots the bundle, which runs entry.py's
-# module-level config parse and every import. 404 is the right answer to an untokened /refresh, so it means the
-# whole chain came up. Anything else, or nothing at all, is a failure.
+# `pnpm dev` does three checks in one: pywrangler sync resolves [project.dependencies] against the Pyodide
+# index (a dependency with no wasm wheel fails here), pnpm build:cf builds the frontend into the assets
+# directory, then workerd boots the bundle, which runs entry.py's module-level config parse and every import.
+# 404 is the right answer to an untokened /refresh, so it means the whole chain came up. Anything else, or
+# nothing at all, is a failure.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -38,7 +39,18 @@ for _ in $(seq 60); do
       cat "$LOG"
       exit 1
     fi
-    echo "Worker booted under Pyodide, answered 404 to an untokened request, and served /status."
+    # The frontend is static assets, served without the Worker's code running: the SPA's index.html for any
+    # navigation that isn't a file, and the files themselves.
+    if ! curl -s -H 'Sec-Fetch-Mode: navigate' http://127.0.0.1:8787/inventory/x | grep -q 'id="app"'; then
+      echo "A navigation to /inventory/x did not get the frontend's index.html:"
+      curl -s -i -H 'Sec-Fetch-Mode: navigate' http://127.0.0.1:8787/inventory/x
+      exit 1
+    fi
+    if [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/static/zy.css)" != 200 ]; then
+      echo "/static/zy.css was not served from the frontend's assets"
+      exit 1
+    fi
+    echo "Worker booted under Pyodide, answered 404 to an untokened request, served /status and the frontend."
     exit 0
     ;;
   000) sleep 1 ;; # Not listening yet

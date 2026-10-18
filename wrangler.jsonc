@@ -4,11 +4,13 @@
   // base_dir defaults to the entrypoint's directory, so src/ansibleinventorycmdb is already bundled as a sibling
   // of entry.py, exactly as it is imported. Nothing needs copying in.
   "main": "src/entry.py",
-  // Vendors the Python deps into python_modules/ before every bundle. pywrangler dev/deploy already do this, but
-  // a plain `npx wrangler ...` (Workers Builds' `wrangler preview` for PR builds) doesn't, and wrangler then
-  // silently ships a bundle with no packages: `ModuleNotFoundError: No module named 'yaml'` on upload.
+  // Runs before every bundle, dev and deploy alike. pywrangler sync vendors the Python deps into python_modules/:
+  // pywrangler dev/deploy already do this, but a plain `npx wrangler ...` (Workers Builds' `wrangler preview` for
+  // PR builds) doesn't, and wrangler then silently ships a bundle with no packages: `ModuleNotFoundError: No
+  // module named 'yaml'` on upload. build:cf builds the frontend into the assets directory below, pointed at
+  // the API's domain by frontend/.env.cloudflare.
   "build": {
-    "command": "uv run pywrangler sync"
+    "command": "uv run pywrangler sync && pnpm build:cf"
   },
   // This date picks the edge's Python runtime, and it has a floor as well as a ceiling:
   //   - 2026-09-08 or later => Python 3.14 (pywrangler's metadata.py maps date -> version). Anything
@@ -20,24 +22,23 @@
   // --force` (delete pylock.toml first, it pins the old ones) and `pnpm check_worker` after.
   "compatibility_date": "2026-09-08",
   "compatibility_flags": ["python_workers"],
-  // Without these only .py files are bundled, and the templates, CSS and fonts would silently go missing.
+  // Without this only .py files are bundled, and src/config.yml would silently go missing.
   "rules": [
     {
       "type": "Data",
-      "globs": [
-        "**/*.j2",
-        "**/*.yml",
-        "**/*.css",
-        "**/*.js",
-        "**/*.woff2",
-        "**/*.ico",
-        "**/*.png",
-        "**/*.webmanifest",
-        "**/*.txt"
-      ],
+      "globs": ["**/*.yml"],
       "fallthrough": true
     }
   ],
+  // The frontend, served by Cloudflare without running the Python at all. single-page-application hands
+  // index.html to any navigation that isn't a file, so a reload on /inventory/x/host/y works. run_worker_first
+  // because at this compatibility_date that fallback also catches navigations to the Worker's own paths, which
+  // would turn the bookmarkable /refresh?token= URL into the home page.
+  "assets": {
+    "directory": "frontend/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/refresh", "/status"]
+  },
   // The commit the bundle was built from, shown in the page footer. Empty here on purpose: `pnpm run deploy`
   // overrides it with `--var COMMIT_SHA:$(git rev-parse --short HEAD)`, so a `pywrangler deploy` run by hand
   // just gets no sha rather than a stale one.
@@ -48,13 +49,13 @@
   "triggers": {
     "crons": ["0 14 * * *"]
   },
-  // This, the cron above and src/config.yml are the whole deployment. Forking to run your own? Change the
-  // bucket name here, the domain in package.json's `domain` script, and the inventories in src/config.yml.
-  // Create the bucket with `pnpm bucket`, then put it on a custom domain with `pnpm domain`
-  // (CF_ZONE_ID=<zone id from the domain's dashboard overview>) — https://cmdb.kierangee.au here.
-  // The domain also needs a zone-level URL Rewrite appending index.html to paths ending in `/`; R2 has no
-  // index document and that cannot live here, since requests to the bucket never reach this Worker.
-  // Recipe in README_Wrangler.md.
+  // The frontend's domain. wrangler creates the DNS record; the hostname must not already be in use.
+  "routes": [{ "pattern": "cmdb.kierangee.au", "custom_domain": true }],
+  // The API. This, the route above, the cron, src/config.yml and frontend/.env.cloudflare are the whole
+  // deployment. Forking to run your own? Change the bucket name here and in package.json's `bucket`/`domain`/
+  // `cors` scripts, both domains, and the inventories in src/config.yml. Create the bucket with `pnpm bucket`,
+  // put it on the API's domain with `pnpm domain` (CF_ZONE_ID=<zone id from the domain's dashboard overview>)
+  // — https://cmdb-api.kierangee.au here — and let the frontend read it cross-origin with `pnpm cors`.
   "r2_buckets": [
     {
       "binding": "CMDB_BUCKET",

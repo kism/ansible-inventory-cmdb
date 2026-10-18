@@ -14,7 +14,7 @@ PROGRAM_NAME_WITH_VERSION = f"{PROGRAM_NAME} v{PROGRAM_VERSION}"
 
 # Supplied at build time, because neither of the two places the version is actually read from ships a .git to
 # look in: an installed wheel and the Worker bundle are both just the package's files. Set it in the environment
-# for the server and for `ansibleinventorycmdb-generate`; the Worker gets it from a wrangler var, see entry.py.
+# for the server; the Worker gets it from a wrangler var, see entry.py.
 COMMIT_SHA_ENV_VAR = "AIC_COMMIT_SHA"
 
 

@@ -1,8 +1,10 @@
 # Deploy as a Cloudflare Worker
 
-An alternate run mode to the [web app](README.md): instead of a server, a cron-triggered Python Worker builds the
-CMDB once a day and writes every page into an R2 bucket, which serves them as static files. Same code, same
-templates — see [`site.py`](src/ansibleinventorycmdb/site.py), which both modes render through.
+The other host, next to the [web app](README.md): instead of a server, a cron-triggered Python Worker builds the
+CMDB's JSON API once a day and writes it into an R2 bucket, which serves it at **cmdb-api.kierangee.au**. The
+frontend is the same Worker's static assets, at **cmdb.kierangee.au**, and renders every page in the browser
+from the bucket. Same API as the web app — both build it through [`api.py`](src/ansibleinventorycmdb/api.py) —
+and the same frontend build, pointed at the bucket's domain instead of `/api`. A page view never runs the Python.
 
 This file is the deployment guide. For local development, the project layout and how the dependency list works,
 see [README_Wrangler_dev.md](README_Wrangler_dev.md).
@@ -13,10 +15,11 @@ repo zip per build instead. See `github_zip_fetcher` in [`cmdb.py`](src/ansiblei
 
 ## Deploy
 
-**This deploys [cmdb.kierangee.au](https://cmdb.kierangee.au).** The deployment is config in the repo, not
-parameters you pass in — [`src/config.yml`](src/config.yml) holds the inventories and
-[`wrangler.jsonc`](wrangler.jsonc) the bucket, cron and domain. To run your own, fork it and change those; there
-are only three edits, and `wrangler.jsonc`'s comments name them.
+**This deploys [cmdb.kierangee.au](https://cmdb.kierangee.au) and cmdb-api.kierangee.au.** The deployment is
+config in the repo, not parameters you pass in — [`src/config.yml`](src/config.yml) holds the inventories,
+[`wrangler.jsonc`](wrangler.jsonc) the bucket, cron and the frontend's domain,
+[`frontend/.env.cloudflare`](frontend/.env.cloudflare) the API's URL, and `package.json`'s `domain` and `cors`
+scripts the API's domain. To run your own, fork it and change those; `wrangler.jsonc`'s comments name them.
 
 Every Cloudflare command is a pnpm script in [`package.json`](package.json), so there is nothing to install
 globally and nothing to remember about flags. `deploy` and `login` share their names with pnpm built-ins, so they
@@ -29,16 +32,16 @@ nvm install                          # node 26, from .nvmrc
 pnpm install
 pnpm run login
 pnpm bucket                          # create the R2 bucket
-CF_ZONE_ID=<zone id> pnpm domain     # put it on cmdb.kierangee.au, see URLs below
+CF_ZONE_ID=<zone id> pnpm domain     # put it on cmdb-api.kierangee.au, see Domains below
+pnpm cors                            # let the frontend read it from another origin
 $EDITOR src/config.yml               # your inventories, if this is a fork
-pnpm run deploy
+pnpm run deploy                      # builds the frontend, and puts the Worker on cmdb.kierangee.au
 ./scripts/build-token.sh set         # the on-demand build endpoint, see below
 ./scripts/build-token.sh run         # seed the bucket now, rather than waiting for 14:00 UTC
 ```
 
-The zone ID is on the domain's dashboard overview page. Skipping the custom domain works too — enable the `r2.dev`
-development URL on the bucket instead — but then nothing rewrites `/` to `/index.html`, so only the explicit
-`/index.html` links work.
+The zone ID is on the domain's dashboard overview page. Skipping the API's custom domain works too: enable the
+bucket's `r2.dev` development URL and put that in `frontend/.env.cloudflare` instead.
 
 `src/config.yml` is bundled with the Worker because a Worker has no instance path to read a config from at
 runtime, and `wrangler.jsonc`'s `Data` rules carry `*.yml` into the bundle. It is tracked rather than gitignored
@@ -60,14 +63,15 @@ which syncs first. The stock deploy command `npx wrangler deploy` skips that ste
 uploads a bundle with **no vendored packages at all** and the deploy is rejected at validation with
 `ModuleNotFoundError: No module named 'yaml'` — `entry.py`'s first vendored import. Nothing warns you: the
 missing `python_modules/` is a debug-level log line, and the only visible symptom is `Total Upload` being a few
-hundred KiB instead of ~8 MB. The build image has no `uv`, hence the build command.
+hundred KiB instead of ~8 MB. The build image has no `uv`, hence the build command. The frontend needs nothing
+extra: wrangler's own `build.command` runs `pnpm build:cf` before every bundle.
 
 ## Running a build
 
 The cron trigger fires daily at 14:00 UTC. **Nothing else fires it**: deploying doesn't, and a deployed cron
 trigger cannot be dispatched by hand — `wrangler dev --remote` returns error 1042 rather than sending one. That
-is why the Worker also answers `/refresh`, token-guarded, and why a fresh deploy leaves the bucket 404ing
-until you use it.
+is why the Worker also answers `/refresh`, token-guarded, and why a fresh deploy leaves the bucket 404ing — and
+the frontend saying it couldn't load the CMDB — until you use it.
 
 [`scripts/build-token.sh`](scripts/build-token.sh) is that endpoint's front end:
 
@@ -110,35 +114,46 @@ curl https://<worker>.workers.dev/status
 {"ok": true, "last_build": "2026-08-17T01:50:40.144000+00:00", "age_seconds": 1, "stale_after_seconds": 93600}
 ```
 
-It reads the upload time of `index.html`, which every run rewrites, so there is nothing to keep in sync and one
-Cloudflare-internal request to answer with. A failed run writes nothing, so it shows up as an age that keeps
+It reads the upload time of `inventories.json`, which every run rewrites, so there is nothing to keep in sync and
+one Cloudflare-internal request to answer with. A failed run writes nothing, so it shows up as an age that keeps
 climbing rather than as an error message. Past 26 hours — a daily cron plus slack — `ok` goes false and the
-status code is **503**, so an uptime monitor can watch the URL without parsing anything.
+status code is **503**, so an uptime monitor can watch the URL without parsing anything. The web app's `/status`
+returns the same body.
 
-Same answer straight from the site, if you'd rather not involve the Worker:
+Same answer straight from the API, if you'd rather not involve the Worker:
 
 ```bash
-curl -sI https://cmdb.kierangee.au/index.html | grep -i last-modified
+curl -sI https://cmdb-api.kierangee.au/inventories.json | grep -i last-modified
 ```
 
 Don't use `wrangler r2 bucket info` for this. Its `object_count` is a lagging metric and still read `0` several
 minutes after a run had demonstrably written every object.
 
-## URLs
+## Domains
 
-R2 public buckets have no index document, so the site's entry point is **`/index.html`**, not `/`. Every page is
-written as `<path>/index.html` and linked that way; bare `/` and `/inventory/x/` have no object key behind them
-and 404.
+| Domain                | Serves                     | Set up by                                             |
+| --------------------- | -------------------------- | ----------------------------------------------------- |
+| cmdb.kierangee.au     | the frontend, `/refresh`, `/status` | `routes` in `wrangler.jsonc`, on `pnpm run deploy` |
+| cmdb-api.kierangee.au | the API, straight out of R2 | `pnpm domain` once, and `pnpm cors` for its CORS policy |
 
-A **URL Rewrite** on the zone in front of the bucket fixes it — a rewrite rather than a redirect, so the address
-bar keeps the clean path. It is the one piece of the deployment that `pnpm domain` and `wrangler.jsonc` can't
-express: the Worker only _writes_ objects on its cron trigger, and requests to the bucket's domain go straight to
-R2 without reaching it. Being zone config, it does **not** travel with `pnpm run deploy`; a new bucket or domain
-needs it again.
+The API's keys all end in `.json` (`inventories.json`, `inventory/<name>/host/<host>.json`, ...), so R2 serves
+every one of them as is: no index document, no rewrite rule. The frontend is a single-page app, and the Worker's
+assets hand `index.html` to any navigation that isn't a file, so a reload on `/inventory/<name>/host/<host>`
+works. `/refresh` and `/status` are listed in `run_worker_first`, so they still reach the Worker.
 
-In the dashboard, **Rules → Overview → Create rule → URL Rewrite Rule**, leaving _Query_ alone:
+Every build also deletes whatever is in the bucket that the build didn't write, so a host dropped from the
+inventory disappears from the API rather than lingering.
 
-| Field                    | Value                                                                            |
-| ------------------------ | -------------------------------------------------------------------------------- |
-| Custom filter expression | `(http.host eq "cmdb.kierangee.au" and ends_with(http.request.uri.path, "/"))`    |
-| Path → Rewrite to        | **Dynamic**, `concat(http.request.uri.path, "index.html")`                        |
+### Moving from the old HTML site
+
+The bucket used to hold rendered HTML and sit on cmdb.kierangee.au itself, behind a zone URL Rewrite appending
+`index.html`. Once, in this order:
+
+1. Free the hostname: **R2 → ansible-inventory-cmdb → Settings → Custom Domains**, remove cmdb.kierangee.au. The
+   site is down from here until step 4.
+2. Delete the URL Rewrite rule (**Rules → Overview** in the zone's dashboard). Nothing needs it any more.
+3. `CF_ZONE_ID=<zone id> pnpm domain`, which now adds cmdb-api.kierangee.au, then `pnpm cors`.
+4. `pnpm run deploy`, which attaches cmdb.kierangee.au to the Worker.
+5. `scripts/build-token.sh run`. The first JSON build also deletes the old HTML objects.
+
+Old bookmarks of the form `/inventory/<name>/index.html` still land on the right page.

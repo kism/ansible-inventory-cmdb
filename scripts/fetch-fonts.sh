@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Copies the latin, non-variable woff2 files zy.css references out of the installed
-# @fontsource packages into static/fonts. Filenames match zy.css's @font-face src, so
+# @fontsource packages into frontend/public/static/fonts. Filenames match zy.css's @font-face src, so
 # this is the only thing that needs to change if a weight or family is added there.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 SRC=node_modules/@fontsource
-DEST=src/ansibleinventorycmdb/static/fonts
+DEST=frontend/public/static/fonts
 mkdir -p "$DEST"
 
 for weight in 400 500 600 700; do

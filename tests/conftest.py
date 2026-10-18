@@ -23,6 +23,7 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
+from ansibleinventorycmdb.api import build_api
 from ansibleinventorycmdb.app import create_app
 from ansibleinventorycmdb.config import Config
 
@@ -142,6 +143,12 @@ def place_test_config() -> Callable:
         shutil.copyfile(TEST_CONFIGS_LOCATION / config_name, Path(path) / "config.yml")
 
     return _place_test_config
+
+
+@pytest.fixture
+def api(get_test_config) -> dict[str, bytes]:
+    """The whole API rendered from the test inventory, keyed by object key: what either host would serve."""
+    return asyncio.run(build_api(Config(**get_test_config("valid.yml")).cmdb))
 
 
 @pytest.fixture

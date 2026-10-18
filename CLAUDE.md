@@ -6,18 +6,20 @@ Presents Ansible inventories as a CMDB (Configuration Management Database) webpa
 ## Setup
 
 ```bash
-uv sync                     # Cloudflare Worker and static-site modes
+uv sync                     # Cloudflare Worker mode
 uv sync --extra server      # ...plus the FastAPI web app
 nvm install                 # node 26, from .nvmrc
-pnpm install                # wrangler and biome, pinned in package.json; pnpm itself is pinned by packageManager
-pnpm fonts                  # copies static/fonts from the @fontsource packages, see below
+pnpm install                # wrangler, biome, vite and typescript, pinned in package.json; pnpm itself by packageManager
+pnpm build                  # the frontend, into frontend/dist, which the web app serves
+pnpm fonts                  # copies frontend/public/static/fonts from the @fontsource packages, see below
 scripts/build-token.sh set  # BUILD_TOKEN, needed before the Worker's /refresh endpoint works
 ```
 
 **Every command is a pnpm script** in `package.json`: the Python checks (`lint`, `format`, `typecheck`, `test`,
-`coverage`) wrap `uv run`, and the Cloudflare ones (`login`, `bucket`, `domain`, `dev`, `deploy`, `tail`) wrap
-wrangler. `wrangler` and `uv run pywrangler` are what those scripts call; don't put them in docs or suggest them to
-the user. `pywrangler` proxies any subcommand it doesn't handle straight to `npx wrangler`, and syncs
+`coverage`) wrap `uv run`, the frontend ones (`build`, `build:cf`, `frontend`, `test:frontend`) wrap vite and
+node, and the Cloudflare ones (`login`, `bucket`, `domain`, `cors`, `dev`, `deploy`, `tail`) wrap wrangler.
+`wrangler` and `uv run pywrangler` are what those scripts call; don't put them in docs or suggest them to the
+user. `pywrangler` proxies any subcommand it doesn't handle straight to `npx wrangler`, and syncs
 `python_modules` first for `dev`/`deploy` — the reason those two don't call wrangler directly.
 
 **`deploy` and `login` are pnpm built-ins**, so they must be run as `pnpm run deploy` / `pnpm run login`; a bare
@@ -26,7 +28,7 @@ the user. `pywrangler` proxies any subcommand it doesn't handle straight to `npx
 pnpm only runs dependency install scripts approved in `pnpm-workspace.yaml` (`allowBuilds`). If a new dependency
 needs one, `pnpm install` stops and names it; approve it with `pnpm approve-builds <package>`.
 
-One `pyproject.toml` covers all three modes. **`[project.dependencies]` is the Worker's install list** — pywrangler
+One `pyproject.toml` covers both hosts. **`[project.dependencies]` is the Worker's install list** — pywrangler
 reads it and nothing else (no extras, no dependency-groups) and resolves it against the Pyodide index, so anything
 the Worker can't run belongs in the `server` extra. See *Dependency layout* below.
 
@@ -36,75 +38,142 @@ the Worker can't run belongs in the `server` extra. See *Dependency layout* belo
 | ----------------------- | -------------------------------------------------------------------------- |
 | Run tests               | `pnpm test` (args go to pytest: `pnpm test -k name`)                       |
 | Run tests with coverage | `pnpm coverage`                                                            |
+| Frontend tests          | `pnpm test:frontend` (`node --test`, no test framework)                    |
 | Lint                    | `pnpm lint` (biome, ruff check, ruff format --check)                       |
 | Format                  | `pnpm format` (biome --write, ruff format, ruff check --fix)               |
-| Type check              | `pnpm typecheck`                                                           |
+| Type check              | `pnpm typecheck` (ty, then tsc on the frontend)                            |
 | Everything CI runs      | `scripts/run-ci-local.sh`                                                  |
-| Render the static site  | `uv run ansibleinventorycmdb-generate <output dir>`                        |
+| Build the frontend      | `pnpm build` (API at `/api`), `pnpm build:cf` (API at cmdb-api)            |
 | Dev server              | `uv run uvicorn ansibleinventorycmdb.app:create_app --factory --port 5100` |
+| Frontend dev server     | `pnpm frontend` (Vite with HMR, proxies `/api` to the dev server above)    |
 | Worker dev / deploy     | `pnpm dev` / `pnpm run deploy` (from the repo root)                        |
 | Check the Worker boots  | `pnpm check_worker` (from the repo root)                                   |
 
-Biome lints and formats the non-Python files — `sorttable.js`, `zy.css`, the JSON(C) — with the same 120 columns
-as ruff. CI has one workflow per check (`lint.yml`, `check_types.yml`, `test.yml`, `build.yml`), so a failing badge
-names what broke; `build.yml` is the fonts check and `check_worker`.
+Biome lints and formats everything that isn't Python — the frontend's TypeScript, `sorttable.js`, `zy.css`, the
+JSON(C) — with the same 120 columns as ruff. CI has one workflow per check (`lint.yml`, `check_types.yml`,
+`test.yml`, `build.yml`), so a failing badge names what broke; `build.yml` is the fonts check, `check_worker`,
+and the frontend's tsc, tests and build.
 
 ## Architecture
+
+Two hosts serve one JSON API and one frontend, and neither is a port of the other:
+
+```
+                       api.build_api(config, fetch)  →  {key: json bytes}
+             ┌──────────────────────┴───────────────────────┐
+ web app: /api/<key> from memory                  Worker: cron PUTs <key> to R2 → cmdb-api.kierangee.au
+          /*  → frontend/dist (SPA fallback)              static assets → cmdb.kierangee.au (SPA fallback)
+          6h refresh loop (lifespan)                      /refresh, /status → entry.py
+```
+
+The Python builds the CMDB and renders it to a fixed set of JSON objects, once per build. The frontend, a
+TypeScript SPA, renders every page in the browser from them. Each host keeps the objects its own native way
+(process memory vs an R2 bucket), refreshes on its own native schedule (an asyncio task vs a cron trigger) and
+serves the frontend its own native way (`StaticFiles` vs Workers Static Assets); the bytes are identical.
 
 src layout, installed as a package (hatchling). Imports are `ansibleinventorycmdb.*`, not path-relative.
 
 | Module                                                                         | Role                                                                              |
 | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
 | [`src/ansibleinventorycmdb/__init__.py`](src/ansibleinventorycmdb/__init__.py) | Docstring only. Importing the package must not pull in FastAPI, see below          |
-| [`src/ansibleinventorycmdb/app.py`](src/ansibleinventorycmdb/app.py)          | `create_app()` factory and the lifespan that owns the refresh task                |
+| [`src/ansibleinventorycmdb/app.py`](src/ansibleinventorycmdb/app.py)          | `create_app()`, the lifespan that owns the refresh task, `SPAStaticFiles`         |
 | [`src/ansibleinventorycmdb/__main__.py`](src/ansibleinventorycmdb/__main__.py) | `main()`, the `ansibleinventorycmdb` console script, runs uvicorn                 |
-| [`src/ansibleinventorycmdb/routes.py`](src/ansibleinventorycmdb/routes.py)     | `APIRouter`, templates, the `HTMLError` page handler, and the CMDB refresh loop   |
-| [`src/ansibleinventorycmdb/site.py`](src/ansibleinventorycmdb/site.py)        | Static site renderer, shared by the routes and the Worker. No FastAPI imports     |
+| [`src/ansibleinventorycmdb/routes.py`](src/ansibleinventorycmdb/routes.py)     | `APIRouter`: `/api/{key}` out of memory, `/status`, `/health`, the refresh loop  |
+| [`src/ansibleinventorycmdb/api.py`](src/ansibleinventorycmdb/api.py)          | The API renderer both hosts build through. No FastAPI imports                     |
 | [`src/ansibleinventorycmdb/cmdb.py`](src/ansibleinventorycmdb/cmdb.py)         | `AnsibleCMDB`: fetches inventory URLs, parses hosts/groups/vars, per-build URL cache |
 | [`src/ansibleinventorycmdb/config.py`](src/ansibleinventorycmdb/config.py)     | pydantic `Config`/`Inventory` models and `load_config()`                          |
 | [`src/ansibleinventorycmdb/logger.py`](src/ansibleinventorycmdb/logger.py)     | `LoggingConfig` and `setup_logger`: one console handler, optionally a file one     |
 | [`src/entry.py`](src/entry.py)                                                | The Cloudflare Worker's entrypoint. Not part of the package, see below           |
-
-Templates use `.html.j2` extension (Jinja2) and all extend `base.html.j2`, which owns the `<head>`, the `<h2>`
-heading and the `sorttable.js` tag — a new page supplies a `title` and a `content` block, nothing else. Both render
-paths resolve the inheritance off the same `FileSystemLoader`, so it needs no code change either side. Static
-assets (CSS, JS, fonts, favicon) are in
-[`src/ansibleinventorycmdb/static/`](src/ansibleinventorycmdb/static/), mounted at `/static`.
-
-The `.woff2` files under `static/fonts/` are checked in, but generated: `pnpm fonts`
-([`scripts/fetch-fonts.sh`](scripts/fetch-fonts.sh)) copies the latin, non-variable weights `zy.css`'s `@font-face`
-rules reference out of the `@fontsource/fira-code`/`@fontsource/noto-sans-display` devDependencies, under the
-existing filenames. Re-run it after bumping either package or adding a weight to `zy.css`; don't hand-edit the
-`.woff2` files. `pnpm check_fonts` ([`scripts/check-fonts.sh`](scripts/check-fonts.sh), also a CI job) is what
-catches forgetting to: it greps the `url(...)` of every `@font-face` rule out of `zy.css` and checks each file is
-present and starts with the `wOF2` magic number. It reads the paths off the stylesheet rather than a hardcoded
-list, so adding a weight needs no change here. This used to load the sheet in headless chromium via playwright;
-don't bring that back for what four lines of shell cover.
+| [`frontend/`](frontend/)                                                      | The TypeScript SPA (Vite, no framework). Not part of the package either          |
 
 `requires-python` is `>=3.13`, a floor below the 3.14 the Worker's Pyodide now runs. On 3.13 annotations are
 evaluated at definition time, so any module with a `TYPE_CHECKING`-only import used in a signature needs
 `from __future__ import annotations`. Ruff's `TC004` catches this — do not silence it.
 
-### Static site / Cloudflare Worker mode
+### The API
 
-[`site.py`](src/ansibleinventorycmdb/site.py) renders every page up front instead of per request.
-[`src/entry.py`](src/entry.py) is a cron-triggered Python Worker that builds the CMDB and PUTs the result into a
-public R2 bucket. `uv run ansibleinventorycmdb-generate <dir>` does the same thing to a directory. User-facing docs
-for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying) and
-[README_Wrangler_dev.md](README_Wrangler_dev.md) (local dev, layout, dependency rules), not README.md.
+[`api.py`](src/ansibleinventorycmdb/api.py) renders every object up front: `build_api()` builds an
+`AnsibleCMDB` and returns `{key: body}` from `render_api()`. The web app serves that dict at `/api/<key>`; the
+Worker PUTs it into R2 at `<key>`. **Both hosts go through `build_api`**, which is what keeps them from drifting —
+`test_serves_every_object` checks the web app returns every object byte for byte.
 
-- `site.py` must not import FastAPI. It is the lower layer; `routes.py` imports `dump_vars`, `group_list` and
-  `group_hosts` from it so both modes share one implementation.
-- Object keys are the app's URL paths with `/index.html` appended (`inventory/x/host/y/index.html`). The suffix is
-  not cosmetic: without it the key `inventory/x` shadows the directory `inventory/x/host/`, which R2's flat
-  keyspace tolerates but a filesystem or an `rclone sync` does not.
-- That key convention is depended on by config **outside this repo**: the deployed bucket's domain has a
-  zone-level URL Rewrite appending `index.html` to any path ending in `/`, because R2 has no index document and
-  `/` would otherwise 404. Recipe in [README_Wrangler.md](README_Wrangler.md). Changing the suffix breaks it.
-- Templates take `root_href` and `page_suffix` so the same template emits both link styles. The web app passes
-  `"/"` and `""`; the static site passes `"/index.html"` and `"/index.html"`. Don't be tempted to switch the
-  static site to bare `"/"` links now that the rewrite exists — `generate`d output browsed over `file://`, and
-  any static host without that rule, both rely on the explicit `index.html`.
+| Key                                         | Body                                                   |
+| ------------------------------------------- | ------------------------------------------------------ |
+| `inventories.json`                          | `{version, repo_url, built_at, inventories: {name: {url, base_url}}}` |
+| `inventory/{name}.json`                     | `{schema_mapping, groups, hosts: {host: {groups, vars}}}` |
+| `inventory/{name}/host/{host}.json`         | `{groups, vars, vars_yaml}`                            |
+| `inventory/{name}/group/{group}.json`       | `{vars, vars_yaml}`                                    |
+| `inventory/{name}/group/{group}/hosts.json` | hostname → vars for the group; `all` included          |
+
+- `api.py` must not import FastAPI. It is the lower layer, and the Worker doesn't install FastAPI.
+- **Every key ends in `.json`.** That's what keeps `inventory/x.json` from shadowing the "directory"
+  `inventory/x/` its children live in — R2's flat keyspace tolerates that, a filesystem doesn't — and why R2
+  needs no index document or rewrite rule. The frontend builds keys out of names in other objects;
+  `test_every_reference_resolves` checks every one it can build was written. Change the scheme in both places.
+- `vars_yaml` is `dump_vars()` output, pre-rendered in Python, so the vars pages show the same yaml (dates, `|`
+  blocks, sorted keys) without a YAML library in the browser. The JSON is `json.dumps(default=str)`, because
+  `yaml.safe_load` turns an unquoted date into a `date`, which plain `json.dumps` refuses.
+- `api_status()` is the `/status` body both hosts return, 503 when stale. Each passes its own last build time
+  (its clock / R2's upload time) and threshold (its refresh interval plus two hours of slack).
+- There used to be a server-rendered HTML site (Jinja templates, `root_href`/`page_suffix` link styles, a
+  `generate` CLI) and a zone-level URL Rewrite appending `index.html` for the bucket. All gone with the move to
+  JSON; don't bring them back.
+
+### The frontend
+
+[`frontend/src/main.ts`](frontend/src/main.ts) routes on `location.pathname`, fetches the one API object a page
+needs, and renders it into `#app`. Built by Vite into `frontend/dist/` (gitignored).
+
+- **Every interpolation goes through `` html`...` ``** ([`html.ts`](frontend/src/html.ts)), which escapes
+  anything that isn't another `html` fragment. Inventory values come from someone's git repo and end up in
+  `innerHTML`; this is the job Jinja's autoescape used to do. Never build markup out of a plain template string.
+- **The API base is a build-time constant**: `import.meta.env.VITE_API_BASE ?? "/api"`. `pnpm build` leaves it
+  unset, which is the web app's own `/api`. `pnpm build:cf` is `--mode cloudflare`, which reads
+  [`frontend/.env.cloudflare`](frontend/.env.cloudflare) (tracked) and points at `https://cmdb-api.kierangee.au`.
+  wrangler's `build.command` runs `build:cf`, so `pnpm dev`, deploy and Workers Builds previews always get it.
+- **Both hosts answer any non-file path with `index.html`** — `SPAStaticFiles` in the web app,
+  `not_found_handling: single-page-application` on the Worker — which is how a reload on
+  `/inventory/x/host/y` works. Links are plain navigations; there is no pushState routing. The router strips a
+  trailing `/index.html`, so links into the old static site still land.
+- `frontend/public/` is copied into `dist/` as is, so `public/static/` is served at `/static/`.
+  `sorttable.js` stays a classic script, not bundled: it defines the global `sortTable()` the hosts table's
+  inline `onclick` calls.
+- Imports carry their `.ts` extension (`allowImportingTsExtensions`, `erasableSyntaxOnly`), so `node --test`
+  runs the same files under Node 26's type stripping with no test framework. `*.test.ts` is excluded from tsc,
+  which would otherwise need `@types/node` for two imports. Root `package.json` is `"type": "module"` for the
+  same reason, and so Vite loads its config as ESM.
+- The web app serves `FRONTEND_DIR`, `frontend/dist` in the checkout — it's not shipped in the wheel. Missing,
+  it logs a warning and serves the API only.
+
+The `.woff2` files under `frontend/public/static/fonts/` are checked in, but generated: `pnpm fonts`
+([`scripts/fetch-fonts.sh`](scripts/fetch-fonts.sh)) copies the latin, non-variable weights `zy.css`'s
+`@font-face` rules reference out of the `@fontsource/fira-code`/`@fontsource/noto-sans-display` devDependencies,
+under the existing filenames. Re-run it after bumping either package or adding a weight to `zy.css`; don't
+hand-edit the `.woff2` files. `pnpm check_fonts` ([`scripts/check-fonts.sh`](scripts/check-fonts.sh), also a CI
+job) is what catches forgetting to: it greps the `url(...)` of every `@font-face` rule out of `zy.css` and checks
+each file is present and starts with the `wOF2` magic number. It reads the paths off the stylesheet rather than a
+hardcoded list, so adding a weight needs no change here. This used to load the sheet in headless chromium via
+playwright; don't bring that back for what four lines of shell cover.
+
+### Cloudflare Worker mode
+
+[`src/entry.py`](src/entry.py) is a cron-triggered Python Worker that runs `build_api` and PUTs the result into a
+public R2 bucket, served at cmdb-api.kierangee.au. The same Worker's static assets are the frontend, at
+cmdb.kierangee.au. User-facing docs for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying)
+and [README_Wrangler_dev.md](README_Wrangler_dev.md) (local dev, layout, dependency rules), not README.md.
+
+- **Two domains, two mechanisms.** The frontend's is a Worker custom domain, `routes` in `wrangler.jsonc`. The
+  API's is the bucket's custom domain, `pnpm domain`, with a CORS policy from
+  [`r2-cors.json`](r2-cors.json) (`pnpm cors`, GET/HEAD from `*`: the data is public, and a named origin would
+  also block the frontend's `workers.dev` copy). Page views never run the Python.
+- **After the puts, `_prune` deletes every key the build didn't write.** A host dropped from the inventory
+  would otherwise keep serving its JSON forever, and the first JSON build cleared out the old HTML site this way.
+  It runs after the puts, so a build that died partway has already raised and deleted nothing. Through the
+  Workers SDK, a plain JS object comes back as a dict (`listed["objects"]`) while R2Object instances keep
+  attribute access (`obj.key`, `index.uploaded`).
+- `run_worker_first: ["/refresh", "/status"]` in `assets`: at this `compatibility_date` the SPA fallback serves
+  `index.html` to *navigation* requests before the Worker sees them, which would turn the bookmarkable
+  `/refresh?token=` URL into the home page.
 - **`wrangler.jsonc` has to sit next to `pyproject.toml`.** pywrangler takes the directory of the nearest
   `pyproject.toml` above the cwd as the project root and looks for the wrangler config *there*; `pylock.toml`,
   `python_modules/` and `.venv-workers/` are written there too. That's why all of it is at the repo root and there
@@ -116,21 +185,21 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying) and
 - `src/entry.py` is excluded from `ty` in `pyproject.toml`; its `workers` import only resolves inside
   Pyodide. It is deliberately *not* inside the package: in the bundle it's a top-level module, so it needs the
   absolute `ansibleinventorycmdb.*` imports it has.
-- **The deployment is the repo**, not arguments to `deploy`: `wrangler.jsonc` holds the bucket, cron and module
-  rules, `src/config.yml` the inventories, `package.json`'s `domain` script the custom domain
-  (`cmdb.kierangee.au`). Deploying elsewhere means forking and editing those. The one piece none of them can
-  express is the zone URL Rewrite appending `index.html`, covered above.
+- **The deployment is the repo**, not arguments to `deploy`: `wrangler.jsonc` holds the bucket, cron, assets,
+  module rules and the frontend's domain, `src/config.yml` the inventories, `frontend/.env.cloudflare` the API's
+  URL, `package.json`'s `domain`/`cors` scripts the API's domain and CORS (`r2-cors.json`). Deploying elsewhere
+  means forking and editing those.
 - Non-`.py` files need a `rules` entry in `wrangler.jsonc` or they are silently left out of the bundle — that's
-  what carries the templates, CSS, fonts and `src/config.yml`.
+  what carries `src/config.yml`, the only one left. The frontend isn't bundled into the Python at all, it's
+  `assets`.
 - **`src/config.yml` is tracked, and it is the Worker's whole config.** A Worker has no instance path at runtime
   and no writable filesystem for `load_config`'s write-the-defaults fallback, so `entry.py` parses this file
   directly at import; wrangler can only bundle what's under `base_dir` (`src/`), which is why it lives there.
   It used to be a gitignored symlink to `instance/config.yml`; **don't reintroduce that.** The deployment is meant
-  to be the repo — a fork changes `src/config.yml`, `wrangler.jsonc` and nothing else — and a checkout with no
-  config produced a bundle that died on import with `FileNotFoundError` on `/session/metadata/config.yml`, because
-  wrangler drops a `rules` glob that matches nothing without a word. There is nothing secret in it: every page it
-  renders is served publicly. The web app and `generate` still read `instance/config.yml` via `load_config()`;
-  that path is untouched.
+  to be the repo — a fork changes the files above and nothing else — and a checkout with no config produced a
+  bundle that died on import with `FileNotFoundError` on `/session/metadata/config.yml`, because wrangler drops a
+  `rules` glob that matches nothing without a word. There is nothing secret in it: everything it builds is served
+  publicly. The web app still reads `instance/config.yml` via `load_config()`; that path is untouched.
 - The Worker must not have to install what it never uses, or can't. `__init__.py` is empty so importing the
   package reaches no FastAPI — the uvicorn target is `ansibleinventorycmdb.app:create_app`, not
   `ansibleinventorycmdb:create_app`; there was a PEP 562 `__getattr__` shim faking the short form, don't bring it
@@ -161,31 +230,30 @@ for this mode live in [README_Wrangler.md](README_Wrangler.md) (deploying) and
   either the `Authorization` header or `?token=`, because the dashboard has no way to fire a cron trigger or set a
   header — a bookmarkable URL is the only trigger a browser can offer. Compare as `bytes`:
   `hmac.compare_digest` raises `TypeError` on non-ASCII `str`, which would turn a junk token into a 500.
-- `/status` is the one path in front of that guard, and it is the only handler that touches the R2 binding. It
-  **stores nothing**: it heads `index.html`, which every build rewrites, so its upload time is the last successful
-  run — a failed build writes nothing and shows up as a growing `age_seconds`. Don't add a status object written
-  per run to record failures too; it answers the same question with state that can go stale. Unauthenticated
-  because the bucket is public, and 503 past `STALE_AFTER_SECONDS` so a dumb uptime monitor works. The binding
-  returns `uploaded` as a **naive** `datetime` in UTC — `.replace(tzinfo=UTC)`, or subtracting from `now(UTC)`
-  raises.
+- `/status` is the one path in front of that guard. It **stores nothing**: it heads `inventories.json`, which
+  every build rewrites, so its upload time is the last successful run — a failed build writes nothing and shows
+  up as a growing `age_seconds`. Don't add a status object written per run to record failures too; it answers
+  the same question with state that can go stale. Unauthenticated because the bucket is public, and 503 past
+  `STALE_AFTER_SECONDS` so a dumb uptime monitor works. The binding returns `uploaded` as a **naive** `datetime`
+  in UTC — `.replace(tzinfo=UTC)`, or subtracting from `now(UTC)` raises.
 - wrangler is pinned in `package.json`, not installed globally — run `pnpm install` at the repo root once.
   `pywrangler` shells out to `npx wrangler`, which prefers the copy pnpm links into `node_modules/.bin`. Bumping
   it may require bumping `compatibility_date` too.
 
 ### Dependency layout
 
-One `pyproject.toml`, three modes. `pywrangler`'s `parse_requirements()` reads **only `[project.dependencies]`** —
+One `pyproject.toml`, both hosts. `pywrangler`'s `parse_requirements()` reads **only `[project.dependencies]`** —
 extras and dependency-groups are invisible to it — and compiles that list against the Pyodide index with
 `--no-build`. So that list is exactly "what the Worker installs", and it is load-bearing:
 
-- `[project.dependencies]`: `httpx`, `jinja2`, `pydantic`, `pyyaml`. All four have Pyodide wheels. Adding something
+- `[project.dependencies]`: `httpx`, `pydantic`, `pyyaml`. All three have Pyodide wheels. Adding something
   here without a Pyodide wheel breaks `pnpm dev`/`deploy` at the resolve step, not at runtime. So does raising
   a floor past what the index for the current `compatibility_date` serves — `pydantic>=2.11` did exactly that
   back when the 3.13 index stopped at 2.10.6; the 3.14 index serves 2.12.5.
   `pnpm check_worker` ([`scripts/check-worker.sh`](scripts/check-worker.sh), also a CI job) is what catches
-  both: it starts `pnpm dev` — which resolves the list, then boots the bundle in workerd — and fails unless an
-  untokened `/refresh` comes back 404 and `/status` returns its JSON. Nothing in pytest runs a line of this
-  under Pyodide.
+  both: it starts `pnpm dev` — which resolves the list, builds the frontend, then boots the bundle in workerd —
+  and fails unless an untokened `/refresh` comes back 404, `/status` returns its JSON, and the frontend is served
+  from assets. Nothing in pytest runs a line of this under Pyodide.
 - `[project.optional-dependencies].server`: `fastapi`, `uvicorn`. `uv sync --extra server`. The `test`
   dependency-group pulls it in as `ansibleinventorycmdb[server]`, so `uv sync` for development still gets it.
 - `[dependency-groups].worker`: `workers-py`, `workers-runtime-sdk`. In `default-groups`, so `uv run pywrangler`
@@ -194,31 +262,37 @@ extras and dependency-groups are invisible to it — and compiles that list agai
   to the socket-based build that dies under Pyodide with `RuntimeError("SSL is not supported.")`. The Pyodide index
   serves its *own* `httpx` wheel (different sha256 from PyPI's, and no `httpcore`/`anyio`/`certifi` in its
   metadata) patched to use the JS `fetch` API, which is why httpx is the one that works in both places.
+- The frontend's dependencies are devDependencies in the root `package.json` (`vite`, `typescript`); it has no
+  runtime ones. One `package.json`, no workspace.
 
 ### State and dependencies
 
-- The CMDB lives on `app.state.cmdb`, the config on `app.state.config`. There are no module-level globals.
-- Page routes take the `CMDB` dependency; JSON routes take `CMDBJson`. Both 500 when the CMDB is missing, the
-  difference is whether the error renders as HTML or JSON.
-- Page routes signal errors by raising `HTMLError(message, status)`, which `html_error_handler` renders with
-  `error.html.j2`. JSON routes raise a plain `HTTPException`.
+- The API lives on `app.state.api` — `dict[str, bytes]`, object key to JSON body, `None` until the first build
+  lands — and its build time on `app.state.built_at`. The config is on `app.state.config`. There are no
+  module-level globals.
+- `/api/{key}` 503s before the first build and 404s for an unknown key, as plain `HTTPException`s. There are no
+  HTML error pages: the frontend renders a failed fetch itself.
+- The refresh task replaces `app.state.api` only once a build has succeeded, so a failed build keeps serving the
+  last good one — the same as the bucket does.
+- The frontend is mounted at `/` *after* the router, so API routes are matched first and an API miss stays an
+  API error rather than becoming `index.html`.
 - `logger` in `app.py` is named `_logger`, because `ansibleinventorycmdb.logger` is a submodule.
 
 ### Fetching
 
 `AnsibleCMDB.build()`/`refresh()` and everything below them are `async`. Routes stay sync `def` because they only
-read the already-built in-memory dicts — they never fetch.
+read the already-built `app.state.api` — they never fetch.
 
 - **HTTP is injected, not hardcoded.** `build(fetch_text)` takes a `Callable[[str], Awaitable[str | None]]` —
   a URL in, the body out, `None` if the response wasn't OK — and threads it down instead of a session. It defaults
   to `httpx_fetcher()`, one `httpx.AsyncClient` per build; `entry.py` passes `github_zip_fetcher` over the Workers
   runtime's `fetch` instead, which is the path that's actually been run in a Worker. `httpx` is imported inside
-  `httpx_fetcher`, so the Worker never loads it.
+  `httpx_fetcher`, so the Worker never loads it. `build_api(config, fetch_text)` passes it straight through.
 - **`github_zip_fetcher` is what keeps the Worker under the free plan's subrequest limit.** A build probes every
   host and group at two paths, ~80 requests for the real inventory, and the free plan allows **50 external
   subrequests per invocation** — that's the `Too many subrequests` exception. It serves
   `raw.githubusercontent.com` URLs out of one `codeload.github.com` zip per repo instead, so a build costs one
-  external subrequest. The R2 puts don't compete with it: requests to Cloudflare services have their own 1000
+  external subrequest. The R2 calls don't compete with it: requests to Cloudflare services have their own 1000
   budget. Non-GitHub URLs, unreadable zips and branch names containing `/` fall back to a request per file, so
   the fetcher is safe to hand any config. `limits.subrequests` in `wrangler.jsonc` does **not** help — the free
   plan's 50 is a ceiling, not a default.
@@ -247,20 +321,20 @@ read the already-built in-memory dicts — they never fetch.
 
 ## Configuration
 
-Two files, same schema, one `Config` model. The web app and `generate` load `instance/config.yml` (gitignored) via
+Two files, same schema, one `Config` model. The web app loads `instance/config.yml` (gitignored) via
 `load_config()`; the Worker parses the tracked [`src/config.yml`](src/config.yml) at import. Key sections: `cmdb`
-(inventory URLs + schema_mapping) and `logging`.
+(inventory URLs + schema_mapping) and `logging`. The frontend's only setting is its API base, see above.
 
 All models set `extra="forbid"`, so an unknown key is a startup failure, not a warning. Adding a config option means
 adding a field to the model in [`config.py`](src/ansibleinventorycmdb/config.py).
 
 The instance path defaults to `./instance`, overridable with `AIC_INSTANCE_PATH`.
 
-`AIC_COMMIT_SHA` is read by `constants.version_string()` for the footer. It is an environment variable rather
-than something read out of `.git`, because the two places the footer is actually seen — an installed wheel and
-the Worker bundle — are just the package's files, with no repo alongside. `pnpm run deploy` passes the sha as a
-wrangler `--var`, and `entry.py` copies that var into `os.environ` in `_build_and_upload`; a wrangler var only
-exists on `env`, which the runtime hands to a handler, so it can't be picked up at import time.
+`AIC_COMMIT_SHA` is read by `constants.version_string()`, which `inventories.json` carries for the footer. It is an
+environment variable rather than something read out of `.git`, because the two places it's actually read — an
+installed wheel and the Worker bundle — are just the package's files, with no repo alongside. `pnpm run deploy`
+passes the sha as a wrangler `--var`, and `entry.py` copies that var into `os.environ` in `_build_and_upload`; a
+wrangler var only exists on `env`, which the runtime hands to a handler, so it can't be picked up at import time.
 
 ## Testing
 
@@ -268,6 +342,7 @@ exists on `env`, which the runtime hands to a handler, so it can't be picked up 
 uv run pytest                   # runs all tests
 uv run pytest -k test_name      # single test
 uv run pytest --random-order    # order independence
+pnpm test:frontend              # the frontend's node --test files
 ```
 
 - **Inventory fetches hit a real local HTTP server**, not a mocking library — `inventory_server` in
@@ -276,9 +351,13 @@ uv run pytest --random-order    # order independence
 - Test configs use `https://pytest.internal` as a placeholder, which `get_test_config` rewrites to the live server
   address. Add new paths to `EMPTY_VAR_PATHS`; the `mock_get_inventory_url` auto-use fixture fails the test on any
   path the server didn't recognise, so a missing entry can't silently become empty data.
-- `build_cmdb` runs the async `refresh()` from a sync test via `asyncio.run`. There is no pytest-asyncio.
+- The `api` fixture is the whole rendered API (`asyncio.run(build_api(...))`); route tests assign it to
+  `app.state.api`. `build_cmdb` runs the async `refresh()` from a sync test for tests of `AnsibleCMDB` itself.
+  There is no pytest-asyncio.
 - The `client` fixture does **not** enter the TestClient context, so the lifespan and its refresh task don't run.
-  `test_lifespan_builds_cmdb` covers the lifespan and waits for the build before leaving the context.
+  `test_lifespan_builds_api` covers the lifespan and waits for the build before leaving the context.
+- The SPA fallback test monkeypatches `ansibleinventorycmdb.app.FRONTEND_DIR` to a temp dir, so pytest needs no
+  `pnpm build`.
 - Always pass `tmp_path` as `instance_path` to `create_app`: with none, `load_config()` writes its default
   config into your real `instance/`. `AnsibleCMDB` takes no path and writes nothing, so it needs no tmp dir.
 - Test configs live in [`tests/configs/`](tests/configs/); test inventories in [`tests/inventories/`](tests/inventories/).
@@ -291,3 +370,5 @@ uv run pytest --random-order    # order independence
 - `ruff` is configured with `select = ["ALL"]` and selective ignores — run `ruff check` before committing.
 - Module logger: `logger = logging.getLogger(__name__)` at module level. `setup_logger` configures the root
   logger, so every module inherits it; there is no wrapper to go through and no custom TRACE level.
+- TypeScript: `strict`, single quotes and no semicolons (biome), camelCase. Fields read off the API keep its
+  snake_case.

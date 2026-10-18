@@ -5,28 +5,53 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from http import HTTPStatus
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException  # What StaticFiles raises; FastAPI's is a subclass of it
 
-from .cmdb import AnsibleCMDB
 from .config import Config, get_instance_path, load_config
 from .constants import PROGRAM_NAME_WITH_VERSION, PROGRAM_VERSION
 from .logger import LoggingConfig, setup_logger
-from .routes import HTMLError, html_error_handler, refresh_cmdb, router
-from .site import STATIC_DIR
+from .routes import refresh_api, router
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator
+
+    from starlette.responses import Response
+    from starlette.types import Scope
 
 _logger = logging.getLogger(__name__)
 
+# `pnpm build` writes the frontend here. It's read out of the checkout rather than shipped in the package, which is
+# how the README runs the server; anywhere else, there is no frontend to serve and the API still works.
+FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+
+class SPAStaticFiles(StaticFiles):
+    """The built frontend, with index.html standing in for any path that isn't a file.
+
+    The frontend routes on the URL path, so a reload on /inventory/x/host/y has to get the app back, the same as
+    the Worker's `not_found_handling: single-page-application` does.
+    """
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        """Serve the file at path, or index.html if there isn't one."""
+        try:
+            return await super().get_response(path, scope)
+        except HTTPException as exc:
+            if exc.status_code != HTTPStatus.NOT_FOUND:
+                raise
+            return await super().get_response("index.html", scope)
+
 
 @contextlib.asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """Run the background refresh task for the life of the server."""
-    task = asyncio.create_task(refresh_cmdb(app.state.cmdb))
+    task = asyncio.create_task(refresh_api(app))
     try:
         yield
     finally:
@@ -50,11 +75,16 @@ def create_app(config: Config | None = None, instance_path: str | None = None) -
 
     app.state.config = config
     app.state.instance_path = instance_path
-    app.state.cmdb = AnsibleCMDB(config.cmdb)
+    app.state.api = None  # Object key -> JSON body, set by the refresh task once the first build lands
+    app.state.built_at = None
 
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     app.include_router(router)
-    app.add_exception_handler(HTMLError, html_error_handler)
+
+    if not (FRONTEND_DIR / "index.html").is_file():
+        _logger.warning("No frontend at %s, run `pnpm build`. Serving the API only.", FRONTEND_DIR)
+    # Mounted last, so the API routes are matched first. check_dir=False so a missing build 404s instead of
+    # failing startup.
+    app.mount("/", SPAStaticFiles(directory=FRONTEND_DIR, check_dir=False), name="frontend")
 
     _logger.info("Starting Web Server, %s", PROGRAM_NAME_WITH_VERSION)
 

@@ -7,31 +7,40 @@
 [![codecov](https://codecov.io/gh/kism/ansible-inventory-cmdb/graph/badge.svg?token=yA1IpJESD1)](https://codecov.io/gh/kism/ansible-inventory-cmdb)
 
 Presents an internet hosted Ansible inventory as a nice webpage. No database, the inventory is fetched over HTTP
-into memory. Three ways to run it: a FastAPI web app that refreshes every 6 hours, a static site rendered to a
-directory, or a cron-triggered Cloudflare Worker that renders into an R2 bucket.
+and rendered into a small JSON API, which a TypeScript frontend turns into pages in the browser. Two ways to host
+it, serving the same API and the same frontend:
+
+- a FastAPI web app, which keeps the API in memory and rebuilds it every 6 hours, or
+- a cron-triggered Cloudflare Worker, which writes the API into an R2 bucket once a day and serves the frontend as
+  static assets. See [README_Wrangler.md](README_Wrangler.md).
 
 ## Prerequisites
 
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
-- For the Worker and the dev tooling: Node, the version in `.nvmrc` (`nvm use`), and
-  [pnpm](https://pnpm.io/installation) (`npm i -g pnpm`). The version is pinned in `packageManager` in `package.json`
+- Node, the version in `.nvmrc` (`nvm use`), and [pnpm](https://pnpm.io/installation) (`npm i -g pnpm`), to build
+  the frontend. The pnpm version is pinned in `packageManager` in `package.json`
 
 ## Run
 
-The web server is an extra, `--extra server`. Without it you get the two serverless modes: the static site renderer
-and the Cloudflare Worker (see below).
+The web server is an extra, `--extra server`. Without it you get what the Cloudflare Worker needs, and nothing
+else.
 
 ### Run Dev
 
 ```bash
 uv sync --extra server
+pnpm install && pnpm build   # the frontend, into frontend/dist, which the web app serves at /
 uv run uvicorn ansibleinventorycmdb.app:create_app --factory --reload --port 5100
 ```
+
+Working on the frontend? Leave the web app running and use `pnpm frontend` instead of `pnpm build`: Vite serves
+the frontend with hot reload on http://localhost:5173 and proxies `/api` to the web app on port 5100.
 
 ### Run Prod
 
 ```bash
 uv sync --extra server --no-dev
+pnpm install && pnpm build
 .venv/bin/uvicorn ansibleinventorycmdb.app:create_app \
     --factory \
     --host 127.0.0.1 \
@@ -44,6 +53,9 @@ uv sync --extra server --no-dev
 `--workers 1` is not optional. Each worker builds and holds its own full copy of the inventory and runs its own
 refresh thread.
 
+The frontend is read from `frontend/dist` in the checkout, so run the server from one. Without a build there the
+server logs a warning and serves the API alone.
+
 There is also a console script, `ansibleinventorycmdb`, which serves on `AIC_HOST` (default `127.0.0.1`) and
 `AIC_PORT` (default `5100`).
 
@@ -51,17 +63,22 @@ Set `AIC_COMMIT_SHA` to have the page footer name the commit the deployment was 
 to read one out of once the package is installed. `pnpm run deploy` does the equivalent for the Cloudflare Worker,
 passing `--var COMMIT_SHA:$(git rev-parse --short HEAD)`.
 
+### Endpoints
+
+| Path            | What                                                                                   |
+| --------------- | -------------------------------------------------------------------------------------- |
+| `/`, `/inventory/...` | The frontend. Any path that isn't a file gets the app, which routes on the URL    |
+| `/api/<key>`    | The API: `inventories.json`, `inventory/<name>.json`, and a `.json` per host and group |
+| `/api/inventory/<name>/group/<group>/hosts.json` | Hostname to vars for every host in a group, `all` included |
+| `/status`       | When the API was last built, 503 once the next refresh is more than two hours overdue  |
+| `/health`       | The version                                                                            |
+
+The Worker serves the same API keys from its bucket's domain, and the same `/status`.
+
 ### Run without a server
 
-Render the whole site to a directory:
-
-```bash
-uv sync
-uv run ansibleinventorycmdb-generate ./out
-```
-
-Or let a cron-triggered Python Worker render every page into a public Cloudflare R2 bucket once a day. See
-[README_Wrangler.md](README_Wrangler.md) to deploy it, and
+Let a cron-triggered Python Worker write the API into a public Cloudflare R2 bucket once a day, with the frontend
+as the Worker's static assets. See [README_Wrangler.md](README_Wrangler.md) to deploy it, and
 [README_Wrangler_dev.md](README_Wrangler_dev.md) to work on it.
 
 ## Configuration
@@ -99,8 +116,10 @@ silently ignored.
 ```bash
 uv sync && pnpm install
 pnpm lint                    # biome, ruff check, ruff format --check (pnpm format to fix)
-pnpm typecheck               # ty
+pnpm typecheck               # ty, and tsc on the frontend
 pnpm test                    # pytest, args pass through: pnpm test -k name
+pnpm test:frontend           # the frontend's node --test files
+pnpm build                   # the frontend, into frontend/dist
 pnpm coverage                # pytest under coverage
 pnpm check_fonts             # every woff2 zy.css references exists
 pnpm check_worker            # boots the Worker under Pyodide, see README_Wrangler_dev.md
@@ -117,7 +136,7 @@ The `.github` folder has one workflow per check, so a failing badge tells you wh
 | `lint.yml`        | Ruff and Biome                                             |
 | `check_types.yml` | ty                                                         |
 | `test.yml`        | pytest with coverage, uploaded to Codecov                  |
-| `build.yml`       | `scripts/check-fonts.sh`, and `pnpm check_worker`          |
+| `build.yml`       | `scripts/check-fonts.sh`, `pnpm check_worker`, and the frontend's tsc, tests and build |
 
 Dependabot PRs are merged automatically once checks pass (`dependabot_automerge.yml`).
 

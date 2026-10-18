@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-STATIC=src/ansibleinventorycmdb/static
+STATIC=frontend/public/static
 
 fonts=$(grep -o 'url("/static/[^"]*\.woff2")' "$STATIC/zy.css" | sed 's|url("/static/||; s|")$||' | sort -u)
 if [ -z "$fonts" ]; then

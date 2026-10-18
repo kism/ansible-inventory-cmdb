@@ -11,7 +11,6 @@ requires-python = ">=3.13"                                                    # 
 # and everything the Worker can't use belongs in an extra below. See README_Wrangler_dev.md.
 dependencies = [
     "httpx>=0.28.1",    # Pyodide's build is patched to use fetch(); aiohttp has no usable wasm wheel at all
-    "jinja2>=3.1.6",    # Not pulled in by fastapi, needed for Jinja2Templates
     # Used directly by config.py and logger.py, not just via fastapi. The floor has to stay at or below what
     # the Pyodide index for wrangler.jsonc's compatibility_date serves, or `pywrangler sync` can't resolve it —
     # pnpm check_worker catches that. The 3.13 index stopped at 2.10.6; the 3.14 one serves 2.12.5.
@@ -19,7 +18,7 @@ dependencies = [
     "pyyaml>=6.0.2",
 ]
 
-# The web app, which neither the Worker nor `ansibleinventorycmdb-generate` needs: uv sync --extra server
+# The web app, which the Worker doesn't need: uv sync --extra server
 [project.optional-dependencies]
 server = ["fastapi>=0.115.0", "uvicorn[standard]>=0.52.1"]
 
@@ -28,13 +27,12 @@ Repository = "https://github.com/kism/ansible-inventory-cmdb"
 
 [project.scripts]
 ansibleinventorycmdb = "ansibleinventorycmdb.__main__:main"
-ansibleinventorycmdb-generate = "ansibleinventorycmdb.site:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-# src/ has non-package siblings now (entry.py, and the config.yml symlink), so don't leave this to inference.
+# src/ has non-package siblings (entry.py, config.yml), so don't leave this to inference.
 [tool.hatch.build.targets.wheel]
 packages = ["src/ansibleinventorycmdb"]
 

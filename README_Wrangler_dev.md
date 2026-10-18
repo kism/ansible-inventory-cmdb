@@ -10,11 +10,15 @@ pnpm dev
 curl http://localhost:8787/cdn-cgi/handler/scheduled   # cron triggers don't fire in dev
 ```
 
+`pnpm dev` builds the frontend first (wrangler's `build.command` runs `pnpm build:cf`) and serves it on the same
+port. That is the Cloudflare build, so it reads the *real* API at cmdb-api.kierangee.au, not the local simulated
+bucket. To look at the pages a local build produced, use the web app; both build through the same `api.py`.
+
 `pnpm check_worker` is the same thing without the babysitting: it starts the dev server, waits for an
-untokened `/refresh` to answer 404 and for `/status` to return its JSON, then shuts it down. That covers the two ways the
-Worker breaks without pytest noticing — a dependency that won't resolve against the Pyodide index, and a bundle
-that won't import under wasm — so it runs in CI and in
-[`scripts/run-ci-local.sh`](scripts/run-ci-local.sh).
+untokened `/refresh` to answer 404, for `/status` to return its JSON and for the frontend to be served from
+assets, then shuts it down. That covers the ways the Worker breaks without pytest noticing — a dependency that
+won't resolve against the Pyodide index, a bundle that won't import under wasm, and assets that aren't wired up —
+so it runs in CI and in [`scripts/run-ci-local.sh`](scripts/run-ci-local.sh).
 
 The R2 binding is local by default, so a dev build writes to a simulated bucket and touches nothing real. To aim
 [`scripts/build-token.sh`](scripts/build-token.sh) at the dev server, override `WORKER_URL` — the environment
@@ -56,9 +60,12 @@ pnpm check_worker
 | ---------------------------------- | --------------------------------------------------------------- |
 | [`src/entry.py`](src/entry.py)     | `scheduled` (cron) and `fetch` (ad-hoc, token-guarded) handlers |
 | [`src/config.yml`](src/config.yml) | The Worker's config, tracked and bundled with it                |
-| [`wrangler.jsonc`](wrangler.jsonc) | Cron schedule, R2 binding, module rules, the domain to deploy to |
-| [`pyproject.toml`](pyproject.toml) | One project for all three run modes, see below                  |
-| [`package.json`](package.json)     | Pins wrangler, and defines every pnpm script                    |
+| [`wrangler.jsonc`](wrangler.jsonc) | Cron, R2 binding, module rules, assets, the frontend's domain   |
+| [`frontend/`](frontend/)           | The TypeScript frontend, the Worker's static assets once built  |
+| [`frontend/.env.cloudflare`](frontend/.env.cloudflare) | The API's URL, baked into the Cloudflare build |
+| [`r2-cors.json`](r2-cors.json)     | The bucket's CORS policy, applied by `pnpm cors`                |
+| [`pyproject.toml`](pyproject.toml) | One project for both hosts, see below                           |
+| [`package.json`](package.json)     | Pins wrangler, vite and typescript, and defines every pnpm script |
 
 `src/entry.py` sits beside `src/ansibleinventorycmdb/` on purpose. wrangler bundles everything under the
 entrypoint's directory, so the package ships at the same path the entrypoint imports it from, with no copying,
@@ -71,7 +78,7 @@ it — and resolves that list against the Pyodide package index with `--no-build
 
 | Where                                    | What                            | How to install              |
 | ---------------------------------------- | ------------------------------- | --------------------------- |
-| `[project.dependencies]`                 | httpx, jinja2, pydantic, pyyaml | `uv sync` — Worker + CLI    |
+| `[project.dependencies]`                 | httpx, pydantic, pyyaml         | `uv sync` — the Worker      |
 | `[project.optional-dependencies].server` | fastapi, uvicorn                | `uv sync --extra server`    |
 | `[dependency-groups].worker`             | workers-py, workers-runtime-sdk | `uv sync` (a default group) |
 
@@ -89,3 +96,4 @@ All gitignored, all self-maintaining — there is nothing to run by hand:
 | `python_modules/` | `pywrangler`, from `pylock.toml`    | when `pyproject.toml` or `pylock.toml` is newer than its `.synced` token |
 | `pylock.toml`     | `pywrangler`, from `pyproject.toml` | on sync; it then constrains later resolves so versions don't drift       |
 | `.venv-workers/`  | `pywrangler`                        | alongside `python_modules`, for editor/type support                      |
+| `frontend/dist/`  | `pnpm build:cf`, via `build.command` | before every `pnpm dev`/deploy bundle                                   |

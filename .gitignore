@@ -17,6 +17,8 @@ htmlcov/
 python_modules/
 pylock.toml
 
-# Config for the web app and `generate`, and the default output dir
+# Config for the web app
 instance/
-output/
+
+# Written by `pnpm build`
+frontend/dist/

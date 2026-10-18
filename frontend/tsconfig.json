@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    // `./html.ts`, with the extension, so `node --test` can run the same files Vite bundles. That also rules out
+    // the TypeScript-only syntax Node's type stripping can't erase.
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src"],
+  // Run by node --test, which has its own types; checking them here would need @types/node for two imports.
+  "exclude": ["src/**/*.test.ts"]
+}

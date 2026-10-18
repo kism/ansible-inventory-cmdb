@@ -2,7 +2,8 @@
 <html lang="en">
 
 <head>
-    <title>{% block title %}Ansible Inventory CMDB{% endblock %}</title>
+    <meta charset="utf-8" />
+    <title>Ansible Inventory CMDB</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta http-equiv="X-Clacks-Overhead" content="GNU Terry Pratchett" />
     <link rel="stylesheet" href="/static/zy.css" />
@@ -14,9 +15,11 @@
 <body>
     <main>
         <h2>Ansible Inventory CMDB</h2>
-        {% block content %}{% endblock %}
+        <div id="app"></div>
     </main>
+    <!-- Classic script, not bundled: it defines the global sortTable() the hosts table's onclick calls. -->
     <script src="/static/sorttable.js"></script>
+    <script type="module" src="/src/main.ts"></script>
 </body>
 
 </html>

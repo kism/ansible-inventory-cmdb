@@ -1,4 +1,8 @@
-"""Cloudflare Worker: render the CMDB to a public R2 bucket.
+"""Cloudflare Worker: build the CMDB's JSON API into a public R2 bucket.
+
+The Cloudflare half of the two hosts; the web app (app.py) is the other. Both build through api.build_api, so the
+bucket holds exactly the objects the web app serves under /api/. The frontend is not this file's business: it's
+the Worker's static assets (wrangler.jsonc), served without this code running.
 
 Normally driven by the cron trigger in wrangler.jsonc. The fetch handler serves two paths: `/refresh` exists
 so a build can be run on demand — a deployed cron trigger cannot be fired by hand, so without it the first build
@@ -11,18 +15,18 @@ import hmac
 import json
 import logging
 import os
-from datetime import UTC, datetime
+from datetime import UTC
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import yaml
 from workers import Response, WorkerEntrypoint, fetch
 
-from ansibleinventorycmdb.cmdb import AnsibleCMDB, github_zip_fetcher
+from ansibleinventorycmdb.api import api_status, build_api
+from ansibleinventorycmdb.cmdb import github_zip_fetcher
 from ansibleinventorycmdb.config import Config
 from ansibleinventorycmdb.constants import COMMIT_SHA_ENV_VAR
 from ansibleinventorycmdb.logger import setup_logger
-from ansibleinventorycmdb.site import render_site
 
 # Read the bundled config.yml rather than config.load_config(): a Worker has no instance path, and no writable
 # filesystem for load_config's write-the-defaults fallback. src/config.yml is tracked, so the bundle always has one.
@@ -33,6 +37,9 @@ logger = logging.getLogger(__name__)
 
 # The cron runs daily, so anything past a day plus a couple of hours of slack means a run was missed or failed.
 STALE_AFTER_SECONDS = 26 * 60 * 60
+
+# Every build rewrites this one, so its upload time is the last successful run. See _status.
+INDEX_KEY = "inventories.json"
 
 
 async def fetch_bytes(url: str) -> bytes | None:
@@ -88,50 +95,64 @@ class Default(WorkerEntrypoint):
     async def _status(self) -> Response:
         """Report when the last build landed, as JSON. One R2 head request, no stored state of its own.
 
-        The bucket already records this: every build rewrites index.html, so its upload time *is* the last
+        The bucket already records this: every build rewrites INDEX_KEY, so its upload time *is* the last
         successful run. A failed build writes nothing, which shows up here as an age that keeps growing — the
         thing worth alerting on either way. Recording failures as well would mean writing a status object on
         every run, and it would not answer a different question.
 
-        Unauthenticated, unlike the build path: the bucket is public, so this leaks nothing a HEAD on the site
+        Unauthenticated, unlike the build path: the bucket is public, so this leaks nothing a HEAD on the API
         itself wouldn't, and it costs one Cloudflare-internal request rather than a repo download. Stale answers
-        503 so a plain uptime monitor can watch the URL without parsing the body.
+        503 so a plain uptime monitor can watch the URL without parsing the body. Same body as the web app's.
         """
-        page = await self.env.CMDB_BUCKET.head("index.html")
+        index = await self.env.CMDB_BUCKET.head(INDEX_KEY)
         # The binding hands `uploaded` over as a datetime. R2 records it in UTC, but the object comes through
         # naive, and subtracting that from an aware now() raises — so say so rather than reading it as local time.
-        uploaded = None if page is None else page.uploaded.replace(tzinfo=UTC)
-        age = None if uploaded is None else round((datetime.now(UTC) - uploaded).total_seconds())
-        fresh = age is not None and age < STALE_AFTER_SECONDS
-
-        body = {
-            "ok": fresh,
-            "last_build": None if uploaded is None else uploaded.isoformat(),
-            "age_seconds": age,
-            "stale_after_seconds": STALE_AFTER_SECONDS,
-        }
+        body = api_status(None if index is None else index.uploaded.replace(tzinfo=UTC), STALE_AFTER_SECONDS)
         return Response(
             json.dumps(body) + "\n",
-            status=200 if fresh else 503,
+            status=200 if body["ok"] else 503,
             headers={"content-type": "application/json"},
         )
 
     async def _build_and_upload(self) -> int:
-        """Build the CMDB and PUT every rendered page into R2. Returns the number of objects written."""
-        # constants.version_string() reads this from the environment, which is the only channel all three modes
+        """Build the API, PUT every object into R2, and delete whatever the build didn't write.
+
+        Returns the number of objects written.
+        """
+        # constants.version_string() reads this from the environment, which is the only channel both hosts
         # share. Set here rather than at import: a wrangler var only exists on `env`, which the runtime hands to
-        # a handler. Both handlers funnel through here, so it is always set before render_site() reads it.
+        # a handler. Both handlers funnel through here, so it is always set before build_api() reads it.
         os.environ[COMMIT_SHA_ENV_VAR] = getattr(self.env, "COMMIT_SHA", "") or ""
 
-        cmdb = AnsibleCMDB(CONFIG.cmdb)  # No instance path: Workers have no writable filesystem
         # One zip per repo, not one request per file: the free plan allows 50 external subrequests per invocation
-        # and a build needs ~75. The R2 puts below come out of a separate, larger budget.
-        await cmdb.build(github_zip_fetcher(fetch_bytes))
+        # and a build needs ~75. The R2 calls below come out of a separate, larger budget.
+        objects = await build_api(CONFIG.cmdb, github_zip_fetcher(fetch_bytes))
 
-        count = 0
-        for key, body, content_type in render_site(cmdb.inventories, CONFIG.cmdb, cmdb.built_at):
-            await self.env.CMDB_BUCKET.put(key, body, httpMetadata={"contentType": content_type})
-            count += 1
+        for key, body in objects.items():
+            await self.env.CMDB_BUCKET.put(key, body, httpMetadata={"contentType": "application/json"})
+        logger.info("Wrote %s objects to R2", len(objects))
 
-        logger.info("Wrote %s objects to R2", count)
-        return count
+        await self._prune(objects)
+        return len(objects)
+
+    async def _prune(self, keep: dict[str, bytes]) -> None:
+        """Delete every object in the bucket that this build didn't write.
+
+        A host dropped from the inventory would otherwise keep its JSON in the bucket, still served, forever.
+        Runs after the puts, so a build that died partway has already returned and deleted nothing.
+        """
+        stale: list[str] = []
+        cursor = None
+        while True:
+            # A plain JS object comes back as a dict; the R2Object entries in it keep attribute access.
+            listed = await (self.env.CMDB_BUCKET.list(cursor=cursor) if cursor else self.env.CMDB_BUCKET.list())
+            stale += [obj.key for obj in listed["objects"] if obj.key not in keep]
+            if not listed["truncated"]:
+                break
+            cursor = listed["cursor"]
+
+        # delete() takes up to 1000 keys a call.
+        for start in range(0, len(stale), 1000):
+            await self.env.CMDB_BUCKET.delete(stale[start : start + 1000])
+        if stale:
+            logger.info("Deleted %s stale objects from R2", len(stale))
