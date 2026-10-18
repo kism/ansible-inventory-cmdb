@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import yaml
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Awaitable, Callable
+    from collections.abc import AsyncGenerator, Awaitable, Callable
 
     from .config import Inventory
 
@@ -33,7 +33,7 @@ GITHUB_RAW_URL = re.compile(r"https://raw\.githubusercontent\.com/([^/]+/[^/]+)/
 
 
 @contextlib.asynccontextmanager
-async def httpx_fetcher() -> AsyncIterator[FetchText]:
+async def httpx_fetcher() -> AsyncGenerator[FetchText]:
     """The default fetcher: one httpx client, wrapped as a plain `url -> body or None` callable.
 
     httpx is imported here rather than at module level so that importing this module doesn't require it. The
