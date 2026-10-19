@@ -1,92 +1,60 @@
-/* Fonts: @font-face rules come from the @fontsource imports in main.ts. */
+/* Only what the frontend renders. The @font-face rules come from the @fontsource imports in main.ts. */
 
-/* A C T U A L  C S S */
+:root {
+  --bg: black;
+  --text: silver;
+  --heading: white;
+  --surface: #222; /* code blocks, table cells */
+  --surface-raised: #333; /* table headings */
+  --rule: rgb(255 255 255 / 12%);
+  --link: #48d1cc;
+  --link-visited: #ba55d3;
+  --selection: teal;
 
-body {
-  font-family:
+  --font-sans:
     "Noto Sans Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  --font-mono: "Fira Code", Consolas, "Lucida Console", monospace;
+  --mono-size: 13px;
+}
+
+body {
+  font-family: var(--font-sans);
   font-size: 18px;
   font-weight: 500;
-  background-color: black;
-  color: silver;
   line-height: 1.5;
-  padding-left: 15px;
-  padding-right: 15px;
+  background-color: var(--bg);
+  color: var(--text);
+  padding: 0 15px;
 }
 
 @media screen and (width <= 430px) {
   body {
-    padding-left: 4px;
-    padding-right: 4px;
+    padding: 0 4px;
   }
 }
 
-hr {
-  border: 0;
-  border-top: 1px solid rgb(255 255 255 / 12%);
-  display: block;
-  margin-top: 16px;
-  margin-bottom: 16px;
-  width: 100%;
-  box-sizing: content-box;
-  height: 0;
-  overflow: visible;
-}
-
-h1,
 h2,
-h3,
-h4,
-h5,
-h6 {
-  font-family: "Fira Code", Consolas, "Lucida Console", monospace;
+h4 {
+  font-family: var(--font-mono);
   line-height: 1.2;
-  color: white;
-}
-
-h1 {
-  font-size: 40px;
-  font-weight: 700;
-  margin: 20px 0 16px;
+  color: var(--heading);
 }
 
 h2 {
   font-size: 28px;
   font-weight: 600;
-  margin: 20px 0 14px;
-}
-
-h3 {
-  font-size: 24px;
-  font-weight: 600;
-  margin: 16px 0 12px;
-  font-style: italic;
+  margin: 10px 0 14px;
 }
 
 h4 {
   font-size: 16px;
-  margin: 16px 0 10px;
   font-weight: 500;
-}
-
-h5 {
-  font-style: italic;
-  font-weight: 500;
-  font-size: 14px;
-  margin: 16px 0 10px;
-}
-
-h6 {
-  font-size: 12px;
-  margin: 16px 0 10px;
-  font-weight: 500;
+  margin: 10px 0;
 }
 
 p {
-  margin: 0;
-  margin-bottom: 16px;
-  margin-top: -8px; /* TODO, LMAOOOOO */
+  margin: -8px 0 16px;
 }
 
 /* Pin to the 600 face that exists rather than leaving <b> to request 700 and be font-matched down to it. */
@@ -95,96 +63,8 @@ strong {
   font-weight: 600;
 }
 
-ul,
-ol {
-  margin-bottom: 8px;
-  padding-left: 40px;
-  vertical-align: baseline;
-}
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  margin-top: +10px;
-}
-
-p + ul {
-  margin-top: -8px;
-}
-
-dl {
-  margin-bottom: 16px;
-}
-
-dd {
-  margin-left: 40px;
-}
-
-img {
-  height: auto;
-  max-width: 100%;
-  vertical-align: baseline;
-}
-
-code,
-pre {
-  font-family: "Fira Code", Consolas, "Lucida Console", monospace;
-  background: #222;
-  display: block;
-  font-size: 13px;
-  margin: 5px 0;
-  padding: 13px;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-}
-
-embed,
-iframe,
-video {
-  border: 0;
-}
-
-small {
-  color: silver;
-  vertical-align: bottom;
-}
-
-footer {
-  font-size: smaller;
-  margin: 20px 0 16px;
-}
-
-footer p {
-  margin-bottom: 0;
-}
-
-u {
-  text-decoration: underline;
-}
-
-s {
-  text-decoration: line-through;
-}
-
-sup {
-  font-size: 14px;
-  vertical-align: super;
-}
-
-sub {
-  font-size: 14px;
-  vertical-align: sub;
-}
-
-mark {
-  background: silver;
-}
-
 a:link {
-  color: #48d1cc;
+  color: var(--link);
   text-decoration: none;
 }
 
@@ -193,59 +73,53 @@ a:focus {
   text-decoration: underline;
 }
 
-a:visited {
-  color: #ba55d3;
+/* .visited is main.ts's own record, since pushState navigations don't reliably count toward :visited. */
+a:visited,
+a.visited {
+  color: var(--link-visited);
+}
+
+code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--mono-size);
+  background: var(--surface);
+  margin: 5px 0;
+  padding: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 table {
-  font-family: "Fira Code", Consolas, "Lucida Console", monospace;
   display: block;
+  font-family: var(--font-mono);
+  font-size: var(--mono-size);
+  font-weight: 400; /* the body's 500 reads as bold in Fira Code at this size */
   border-collapse: collapse;
-  font-size: 13px;
   margin-bottom: 5px;
   padding-bottom: 13px;
   overflow-wrap: break-word;
 }
 
 tr {
-  border-bottom: 2px solid rgb(255 255 255 / 12%);
-  border-right: 0px solid black;
-  border-left: 0px solid black;
-  padding: 8px;
-  margin: 8px;
-}
-
-thead tr {
-  border-bottom: 1px solid rgb(255 255 255 / 12%);
-  background: #444;
-}
-
-caption {
-  padding: 8px 0;
+  border-bottom: 2px solid var(--rule);
 }
 
 th,
 td {
-  padding: 7px;
-  vertical-align: inherit;
+  padding: 3px;
   text-align: left;
+  vertical-align: inherit;
 }
 
 th {
-  background-color: #333;
-  /* The UA sheet's `bold` is 700, a real Fira Code face but a heavy jump from the 500 cells. 600 to match <b>. */
+  background-color: var(--surface-raised);
+  /* The UA sheet's `bold` is 700, a real Fira Code face but a heavy jump from the 400 cells. 600 to match <b>. */
   font-weight: 600;
 }
 
 td {
-  background-color: #222;
-}
-
-thead th {
-  background-color: #444;
-  border: 0;
-  border-bottom: 2px solid black;
-  text-align: left;
+  background-color: var(--surface);
 }
 
 /* Every heading of the hosts table sorts on click, see sort.ts. */
@@ -253,186 +127,16 @@ thead th {
   cursor: pointer;
 }
 
-tfoot tr {
-  text-align: left;
+footer {
+  font-size: smaller;
+  margin: 20px 0 16px;
 }
 
-tfoot td {
-  color: black;
-  font-size: 8px;
-  font-style: italic;
-  padding: 16px 4px;
+small {
+  vertical-align: bottom;
 }
 
 ::selection {
-  color: white;
-  background: teal;
-}
-
-/* BUTTON */
-
-.button,
-button,
-input[type="submit"],
-input[type="reset"],
-input[type="button"] {
-  display: inline-block;
-  height: 30px;
-  padding: 0 15px;
-  color: white;
-  text-align: center;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 30px;
-  letter-spacing: 0.1rem;
-  text-transform: uppercase;
-  text-decoration: none;
-  white-space: nowrap;
-  background-color: teal;
-  border-radius: 4px;
-  border: 1px solid white;
-  cursor: pointer;
-  box-sizing: border-box;
-  min-width: 100px;
-}
-
-.button:hover,
-button:hover,
-input[type="submit"]:hover,
-input[type="reset"]:hover,
-input[type="button"]:hover,
-.button:focus,
-button:focus,
-input[type="submit"]:focus,
-input[type="reset"]:focus,
-input[type="button"]:focus {
-  color: silver;
-  border-color: white;
-  background-color: teal;
-  outline: 0;
-}
-
-/* Forms */
-input[type="email"],
-input[type="number"],
-input[type="search"],
-input[type="text"],
-input[type="tel"],
-input[type="url"],
-input[type="password"],
-textarea,
-select {
-  height: 23px;
-  padding: 6px 10px; /* The 6px vertically centers text on FF, ignored by Webkit */
-  background-color: grey;
-  border: 1px solid white;
-  color: white;
-  border-radius: 4px;
-  box-shadow: none;
-  box-sizing: border-box;
-  width: 250px;
-  margin-top: 3px;
-  margin-bottom: 3px;
-}
-
-/* Removes awkward default styles on some inputs for iOS */
-input[type="email"],
-input[type="number"],
-input[type="search"],
-input[type="text"],
-input[type="tel"],
-input[type="url"],
-input[type="password"],
-textarea {
-  appearance: none;
-}
-
-textarea {
-  min-height: 10px;
-  padding-top: 1px;
-  padding-bottom: 1px;
-}
-
-input[type="email"]:focus,
-input[type="number"]:focus,
-input[type="search"]:focus,
-input[type="text"]:focus,
-input[type="tel"]:focus,
-input[type="url"]:focus,
-input[type="password"]:focus,
-textarea:focus,
-select:focus {
-  border: 1px solid teal;
-  outline: 0;
-}
-
-label,
-legend {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
-}
-
-fieldset {
-  padding: 0;
-  border-width: 0;
-}
-
-input[type="checkbox"],
-input[type="radio"] {
-  display: inline;
-}
-
-label > .label-body {
-  display: inline-block;
-  margin-left: 0.5rem;
-  font-weight: normal;
-}
-
-/* Ruining the classless dream */
-@media (width >= 400px) {
-  .container {
-    width: 85%;
-    padding: 0;
-  }
-}
-
-@media (width >= 550px) {
-  .container {
-    width: 80%;
-  }
-
-  .column,
-  .columns {
-    margin-left: 4%;
-  }
-
-  .column:first-child,
-  .columns:first-child {
-    margin-left: 0;
-  }
-
-  .one-half.column {
-    width: 48%;
-  }
-}
-
-.container {
-  position: relative;
-  width: 100%;
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 0 20px;
-  box-sizing: border-box;
-}
-
-.column,
-.columns {
-  width: 100%;
-  float: left;
-  box-sizing: border-box;
-}
-
-.row {
-  max-width: 100%;
+  color: var(--heading);
+  background: var(--selection);
 }

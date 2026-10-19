@@ -164,6 +164,24 @@ async function route(path: string): Promise<Page> {
   return { title: 'Not found', body: html`<p>${homeLink}</p><p>No such page.</p>` }
 }
 
+// Pages seen in this browser, for the .visited link colour. Browsers don't reliably count pushState navigations
+// toward :visited, so the app keeps its own list. ponytail: grows forever, one short path per page ever opened.
+const VISITED_KEY = 'visited'
+const visited = new Set<string>()
+try {
+  for (const path of JSON.parse(localStorage.getItem(VISITED_KEY) ?? '[]')) visited.add(path)
+} catch {} // storage blocked or junk: start empty
+
+function markVisited(app: HTMLElement, path: string): void {
+  visited.add(path)
+  try {
+    localStorage.setItem(VISITED_KEY, JSON.stringify([...visited]))
+  } catch {}
+  for (const link of app.querySelectorAll('a')) {
+    if (link.origin === location.origin && visited.has(link.pathname)) link.classList.add('visited')
+  }
+}
+
 async function render(): Promise<void> {
   const app = document.getElementById('app') as HTMLElement
   const path = location.pathname
@@ -174,6 +192,7 @@ async function render(): Promise<void> {
     app.innerHTML = page.body.toString()
     const hosts = document.getElementById('Hosts')
     if (hosts instanceof HTMLTableElement) sortByHeading(hosts, 'IP Address')
+    markVisited(app, path)
   } catch (error) {
     // Before the first build the API has nothing: a 503 from the web app, a 404 from the bucket.
     app.innerHTML = html`<p>${homeLink}</p>
