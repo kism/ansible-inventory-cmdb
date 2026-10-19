@@ -10,6 +10,7 @@
   --link: #48d1cc;
   --link-visited: #ba55d3;
   --selection: teal;
+  --focus: white;
 
   --font-sans:
     "Noto Sans Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif,
@@ -68,9 +69,14 @@ a:link {
   text-decoration: none;
 }
 
-a:hover,
-a:focus {
+a:hover {
   text-decoration: underline;
+}
+
+/* :focus, not :focus-visible: the link main.ts re-selects on coming back is focused from script, and should show. */
+a:focus {
+  outline: 1px solid var(--focus);
+  outline-offset: 2px;
 }
 
 /* .visited is main.ts's own record, since pushState navigations don't reliably count toward :visited. */

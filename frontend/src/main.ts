@@ -193,12 +193,28 @@ async function render(): Promise<void> {
     const hosts = document.getElementById('Hosts')
     if (hosts instanceof HTMLTableElement) sortByHeading(hosts, 'IP Address')
     markVisited(app, path)
+    restoreFocus()
   } catch (error) {
     // Before the first build the API has nothing: a 503 from the web app, a 404 from the bucket.
     app.innerHTML = html`<p>${homeLink}</p>
         <p>Couldn't load ${String(error).replace(/^Error: /, '')}. If the CMDB hasn't been built yet, try again in a
         moment.</p>`.toString()
   }
+}
+
+const appLinks = (): HTMLAnchorElement[] => [...document.querySelectorAll<HTMLAnchorElement>('#app a')]
+
+/** Back on a page: re-select the link that was followed from it, so the keyboard picks up where it left off. */
+function restoreFocus(): void {
+  const { focusHref, focusIndex } = history.state ?? {}
+  if (!focusHref) return
+  const links = appLinks()
+  // The index picks the right one of several links to the same page (a group, in every row it's in); the href is
+  // the fallback for when it no longer points at it.
+  const byIndex = links[focusIndex]
+  const link =
+    byIndex?.getAttribute('href') === focusHref ? byIndex : links.find((l) => l.getAttribute('href') === focusHref)
+  link?.focus()
 }
 
 document.addEventListener('click', (event) => {
@@ -210,10 +226,61 @@ document.addEventListener('click', (event) => {
   // Off-site links and the raw API JSON (same origin under the web app's /api) are left to the browser.
   if (url.origin !== location.origin || url.pathname.startsWith(`${API}/`)) return
   event.preventDefault()
-  history.pushState(null, '', url)
+  // Remember which link this page was left by, for restoreFocus() when coming back to it.
+  const focus = { focusHref: link.getAttribute('href'), focusIndex: appLinks().indexOf(link) }
+  history.replaceState({ ...history.state, ...focus }, '')
+  // The state marks an entry the app pushed, so there's an in-app page behind it for Backspace to go back to.
+  history.pushState({ inApp: true }, '', url)
   render().then(() => scrollTo(0, 0))
 })
 addEventListener('popstate', render)
+
+/**
+ * Arrow keys move between links: left/right to the previous/next one, up/down to the closest one in the line of
+ * links above/below, which in the hosts table is the same column of the next row. Nothing selected yet, any arrow
+ * selects the first link.
+ */
+function moveFocus(key: string): void {
+  const links = appLinks()
+  const i = links.indexOf(document.activeElement as HTMLAnchorElement)
+  if (i === -1) {
+    links[0]?.focus()
+    return
+  }
+  if (key === 'ArrowLeft' || key === 'ArrowRight') {
+    links[i + (key === 'ArrowRight' ? 1 : -1)]?.focus()
+    return
+  }
+
+  const from = links[i].getBoundingClientRect()
+  const down = key === 'ArrowDown'
+  const beyond = links
+    .map((link) => ({ link, rect: link.getBoundingClientRect() }))
+    .filter(({ rect }) => (down ? rect.top >= from.bottom - 1 : rect.bottom <= from.top + 1))
+  if (!beyond.length) return
+  const tops = beyond.map(({ rect }) => rect.top)
+  const nearest = down ? Math.min(...tops) : Math.max(...tops)
+  const centre = (rect: DOMRect): number => rect.left + rect.width / 2
+  const line = beyond.filter(({ rect }) => Math.abs(rect.top - nearest) < from.height / 2)
+  line.sort((a, b) => Math.abs(centre(a.rect) - centre(from)) - Math.abs(centre(b.rect) - centre(from)))
+  line[0].link.focus()
+}
+
+const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
+
+document.addEventListener('keydown', (event) => {
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return
+  const target = event.target as HTMLElement
+  if (target.isContentEditable || target.closest('input, textarea, select')) return
+  if (ARROWS.has(event.key)) {
+    event.preventDefault()
+    moveFocus(event.key)
+  } else if (event.key === 'Backspace' && history.state?.inApp) {
+    // Back, but only to a page of the app: on the page you landed on, Backspace does nothing rather than leave.
+    event.preventDefault()
+    history.back()
+  }
+})
 
 document.addEventListener('click', (event) => {
   const heading = (event.target as Element).closest('#Hosts th')
