@@ -33,7 +33,7 @@ pnpm install && pnpm build   # the frontend, into frontend/dist, which the web a
 uv run uvicorn ansibleinventorycmdb.app:create_app --factory --reload --port 5100
 ```
 
-Working on the frontend? Leave the web app running and use `pnpm frontend` instead of `pnpm build`: Vite serves
+Working on the frontend? Leave the web app running and use `pnpm dev` instead of `pnpm build`: Vite serves
 the frontend with hot reload on http://localhost:5173 and proxies `/api` to the web app on port 5100.
 
 ### Run Prod
@@ -117,14 +117,13 @@ silently ignored.
 uv sync && pnpm install
 pnpm lint                    # biome, ruff check, ruff format --check (pnpm format to fix)
 pnpm typecheck               # ty, and tsc on the frontend
-pnpm test                    # pytest, args pass through: pnpm test -k name
-pnpm test:frontend           # the frontend's node --test files
+pnpm test                    # vitest, then pytest; args go to pytest: pnpm test -k name
 pnpm build                   # the frontend, into frontend/dist
-pnpm coverage                # pytest under coverage
+pnpm coverage                # both, under coverage
 pnpm check_worker            # boots the Worker under Pyodide, see README_Wrangler_dev.md
 ```
 
-`scripts/run-ci-local.sh` runs everything the workflows do, in order, and formats while it's at it.
+`pnpm check` runs everything the workflows do, in order, and formats while it's at it.
 
 ## Workflows
 
@@ -134,8 +133,8 @@ The `.github` folder has one workflow per check, so a failing badge tells you wh
 | ----------------- | ---------------------------------------------------------- |
 | `lint.yml`        | Ruff and Biome                                             |
 | `check_types.yml` | ty                                                         |
-| `test.yml`        | pytest with coverage, uploaded to Codecov                  |
-| `build.yml`       | `pnpm check_worker`, and the frontend's tsc, tests and build |
+| `test.yml`        | vitest and pytest with coverage, uploaded to Codecov       |
+| `build.yml`       | `pnpm check_worker`, and the frontend's tsc and build |
 
 Dependabot PRs are merged automatically once checks pass (`dependabot_automerge.yml`).
 

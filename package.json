@@ -7,27 +7,24 @@
     "lint": "biome check && uv run ruff check && uv run ruff format --check",
     "format": "biome check --write && uv run ruff format && uv run ruff check --fix",
     "typecheck": "uv run ty check && tsc -p frontend",
-    "test": "uv run pytest",
-    "test:frontend": "node --test frontend/src/",
-    "coverage": "uv run coverage run && uv run coverage report",
+    "test": "vitest run --root frontend && uv run pytest",
+    "coverage": "vitest run --root frontend --coverage && uv run coverage run && uv run coverage report",
     "build": "vite build frontend",
-    "build:cf": "vite build frontend --mode cloudflare",
-    "frontend": "vite frontend",
     "check_worker": "scripts/check-worker.sh",
-    "login": "wrangler login --browser false",
-    "bucket": "wrangler r2 bucket create ansible-inventory-cmdb",
-    "domain": "wrangler r2 bucket domain add ansible-inventory-cmdb --domain cmdb-api.kierangee.au --zone-id $CF_ZONE_ID --min-tls 1.2",
-    "cors": "wrangler r2 bucket cors set ansible-inventory-cmdb --file r2-cors.json",
-    "tail": "wrangler tail --format pretty",
-    "dev": "uv run pywrangler dev",
-    "deploy": "uv run pywrangler deploy --var COMMIT_SHA:$(git rev-parse --short HEAD)"
+    "dev": "vite frontend",
+    "dev:cf": "uv run pywrangler dev",
+    "deploy": "uv run pywrangler deploy --var COMMIT_SHA:$(git rev-parse --short HEAD)",
+    "check": "pnpm format && pnpm typecheck && pnpm test -q --tb=short && pnpm build && pnpm check_worker",
+    "provision": "scripts/provision.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
     "@fontsource/fira-code": "^5.3.0",
     "@fontsource/noto-sans-display": "^5.3.0",
+    "@vitest/coverage-v8": "^5.0.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
+    "vitest": "^5.0.5",
     "wrangler": "^4.151.1"
   }
 }

@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   test:
-    name: pytest
+    name: pytest & vitest
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -35,14 +35,25 @@ jobs:
         with:
           python-version: "3.14"
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6 # Version comes from packageManager in package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
       - name: Install the project
-        run: uv sync --no-group type --no-group lint --no-group worker
+        run: |
+          uv sync --no-group type --no-group lint --no-group worker
+          pnpm install --frozen-lockfile
 
       - name: Test
-        run: uv run coverage run # pytest invocation is in pyproject.toml [tool.coverage.run]
+        run: pnpm coverage # vitest, then pytest under coverage: invocation in pyproject.toml [tool.coverage.run]
 
       - name: Coverage report
-        run: uv run coverage xml # xml report needed for codecov
+        run: uv run coverage xml # xml report needed for codecov; vitest already wrote frontend/coverage/lcov.info
 
       - name: Upload coverage
         uses: codecov/codecov-action@v7

@@ -11,18 +11,20 @@ uv sync --extra server      # ...plus the FastAPI web app
 nvm install                 # node 26, from .nvmrc
 pnpm install                # wrangler, biome, vite and typescript, pinned in package.json; pnpm itself by packageManager
 pnpm build                  # the frontend, into frontend/dist, which the web app serves
-scripts/build-token.sh set  # BUILD_TOKEN, needed before the Worker's /refresh endpoint works
+pnpm provision              # once per Cloudflare account: bucket, CORS, API domain, BUILD_TOKEN
 ```
 
-**Every command is a pnpm script** in `package.json`: the Python checks (`lint`, `format`, `typecheck`, `test`,
-`coverage`) wrap `uv run`, the frontend ones (`build`, `build:cf`, `frontend`, `test:frontend`) wrap vite and
-node, and the Cloudflare ones (`login`, `bucket`, `domain`, `cors`, `dev`, `deploy`, `tail`) wrap wrangler.
+**Every command is a pnpm script** in `package.json`: the checks (`lint`, `format`, `typecheck`, `test`,
+`coverage`) each run the Python's tool and the frontend's one after the other, `build` and `dev` wrap vite, the
+Cloudflare ones (`dev:cf`, `deploy`) wrap pywrangler, and `check`, `check_worker` and `provision` are the rest. Keep
+the count down: a one-off belongs in `scripts/provision.sh`, not a new script.
 `wrangler` and `uv run pywrangler` are what those scripts call; don't put them in docs or suggest them to the
 user. `pywrangler` proxies any subcommand it doesn't handle straight to `npx wrangler`, and syncs
-`python_modules` first for `dev`/`deploy` — the reason those two don't call wrangler directly.
+`python_modules` first for `dev:cf`/`deploy` — the reason those two don't call wrangler directly.
 
-**`deploy` and `login` are pnpm built-ins**, so they must be run as `pnpm run deploy` / `pnpm run login`; a bare
-`pnpm deploy` runs pnpm's own workspace deploy instead. Every other script works as `pnpm <name>`.
+**`deploy` is a pnpm built-in**, so it must be run as `pnpm run deploy`; a bare `pnpm deploy` runs pnpm's own
+workspace deploy instead. It's Workers Builds' deploy command, which is how this is deployed. `provision` is
+named that because `pnpm setup` is a built-in too. Every other script works as `pnpm <name>`.
 
 pnpm only runs dependency install scripts approved in `pnpm-workspace.yaml` (`allowBuilds`). If a new dependency
 needs one, `pnpm install` stops and names it; approve it with `pnpm approve-builds <package>`.
@@ -35,23 +37,22 @@ the Worker can't run belongs in the `server` extra. See *Dependency layout* belo
 
 | Task                    | Command                                                                    |
 | ----------------------- | -------------------------------------------------------------------------- |
-| Run tests               | `pnpm test` (args go to pytest: `pnpm test -k name`)                       |
-| Run tests with coverage | `pnpm coverage`                                                            |
-| Frontend tests          | `pnpm test:frontend` (`node --test`, no test framework)                    |
+| Run tests               | `pnpm test` (vitest, then pytest; args go to pytest: `pnpm test -k name`)  |
+| Run tests with coverage | `pnpm coverage` (both; `coverage.xml` and `frontend/coverage/lcov.info`)   |
 | Lint                    | `pnpm lint` (biome, ruff check, ruff format --check)                       |
 | Format                  | `pnpm format` (biome --write, ruff format, ruff check --fix)               |
 | Type check              | `pnpm typecheck` (ty, then tsc on the frontend)                            |
-| Everything CI runs      | `scripts/run-ci-local.sh`                                                  |
-| Build the frontend      | `pnpm build` (API at `/api`), `pnpm build:cf` (API at cmdb-api)            |
+| Everything CI runs      | `pnpm check`                                                               |
+| Build the frontend      | `pnpm build` (API at `/api`; wrangler's `build.command` does the cf one)   |
 | Dev server              | `uv run uvicorn ansibleinventorycmdb.app:create_app --factory --port 5100` |
-| Frontend dev server     | `pnpm frontend` (Vite with HMR, proxies `/api` to the dev server above)    |
-| Worker dev / deploy     | `pnpm dev` / `pnpm run deploy` (from the repo root)                        |
+| Frontend dev server     | `pnpm dev` (Vite with HMR, proxies `/api` to the dev server above)         |
+| Worker dev / deploy     | `pnpm dev:cf` / `pnpm run deploy` (from the repo root)                     |
 | Check the Worker boots  | `pnpm check_worker` (from the repo root)                                   |
 
 Biome lints and formats everything that isn't Python — the frontend's TypeScript, `zy.css`, the
 JSON(C) — with the same 120 columns as ruff. CI has one workflow per check (`lint.yml`, `check_types.yml`,
 `test.yml`, `build.yml`), so a failing badge names what broke; `build.yml` is `check_worker` and the frontend's
-tsc, tests and build.
+tsc and build; `test.yml` runs both test suites.
 
 ## Architecture
 
@@ -128,9 +129,9 @@ all its host and group objects at low fetch priority, so clicking through render
   anything that isn't another `html` fragment. Inventory values come from someone's git repo and end up in
   `innerHTML`; this is the job Jinja's autoescape used to do. Never build markup out of a plain template string.
 - **The API base is a build-time constant**: `import.meta.env.VITE_API_BASE ?? "/api"`. `pnpm build` leaves it
-  unset, which is the web app's own `/api`. `pnpm build:cf` is `--mode cloudflare`, which reads
-  [`frontend/.env.cloudflare`](frontend/.env.cloudflare) (tracked) and points at `https://cmdb-api.kierangee.au`.
-  wrangler's `build.command` runs `build:cf`, so `pnpm dev`, deploy and Workers Builds previews always get it.
+  unset, which is the web app's own `/api`. wrangler's `build.command` builds with `--mode cloudflare`, which reads
+  [`frontend/.env.cloudflare`](frontend/.env.cloudflare) (tracked) and points at `https://cmdb-api.kierangee.au`,
+  so `pnpm dev:cf`, deploy and Workers Builds previews always get it.
 - **Both hosts answer any non-file path with `index.html`** — `SPAStaticFiles` in the web app,
   `not_found_handling: single-page-application` on the Worker — which is how a reload on
   `/inventory/x/host/y` works. A click on an in-app link is caught and rendered with pushState; off-site links and the API's own JSON
@@ -141,10 +142,10 @@ all its host and group objects at low fetch priority, so clicking through render
   ([`sort.ts`](frontend/src/sort.ts)), from `render()` and a delegated listener — no inline `onclick`, since the
   markup is `innerHTML`. It used to be a classic `sorttable.js`, whose sort-on-load ran before the SPA had
   rendered the table.
-- Imports carry their `.ts` extension (`allowImportingTsExtensions`, `erasableSyntaxOnly`), so `node --test`
-  runs the same files under Node 26's type stripping with no test framework. `*.test.ts` is excluded from tsc,
-  which would otherwise need `@types/node` for two imports. Root `package.json` is `"type": "module"` for the
-  same reason, and so Vite loads its config as ESM.
+- Tests are vitest, `src/*.test.ts` next to what they test, run with `--root frontend` so they share
+  `vite.config.ts` (its `test` block holds the coverage settings). `pnpm test`/`pnpm coverage` run vitest
+  *first*, so trailing args land on pytest. Root `package.json` is `"type": "module"` so Vite loads its config
+  as ESM.
 - The web app serves `FRONTEND_DIR`, `frontend/dist` in the checkout — it's not shipped in the wheel. Missing,
   it logs a warning and serves the API only.
 
@@ -161,12 +162,11 @@ cmdb.kierangee.au. User-facing docs for this mode live in [README_Wrangler.md](R
 and [README_Wrangler_dev.md](README_Wrangler_dev.md) (local dev, layout, dependency rules), not README.md.
 
 - **Two domains, two mechanisms.** The frontend's is a Worker custom domain, `routes` in `wrangler.jsonc`. The
-  API's is the bucket's custom domain, `pnpm domain`, with a CORS policy from
-  [`r2-cors.json`](r2-cors.json) (`pnpm cors`, GET/HEAD from `*`: the data is public, and a named origin would
-  also block the frontend's `workers.dev` copy). Page views never run the Python.
+  API's is the bucket's custom domain, added by `pnpm provision` along with a CORS policy (GET/HEAD from `*`: the
+  data is public, and a named origin would also block the frontend's `workers.dev` copy). Page views never run the Python.
 - **`workers_dev` and `preview_urls` are set explicitly** because declaring `routes` silently turns both off — the
-  first deploy with the custom domain did exactly that, and `scripts/build-token.sh`'s `WORKER_URL` stopped
-  resolving. Don't drop them as "defaults".
+  first deploy with the custom domain did exactly that. PR previews need `preview_urls`, and a fork without a
+  custom domain has only `workers.dev`. Don't drop them as "defaults".
 - **After the puts, `_prune` deletes every key the build didn't write.** A host dropped from the inventory
   would otherwise keep serving its JSON forever, and the first JSON build cleared out the old HTML site this way.
   It runs after the puts, so a build that died partway has already raised and deleted nothing. Through the
@@ -188,8 +188,9 @@ and [README_Wrangler_dev.md](README_Wrangler_dev.md) (local dev, layout, depende
   absolute `ansibleinventorycmdb.*` imports it has.
 - **The deployment is the repo**, not arguments to `deploy`: `wrangler.jsonc` holds the bucket, cron, assets,
   module rules and the frontend's domain, `src/config.yml` the inventories, `frontend/.env.cloudflare` the API's
-  URL, `package.json`'s `domain`/`cors` scripts the API's domain and CORS (`r2-cors.json`). Deploying elsewhere
-  means forking and editing those.
+  URL. Deploying elsewhere means forking and editing those, then `pnpm provision`, which reads its names off
+  them — **keep it free of anything specific to this deployment**. It's idempotent, and reuses `.dev.vars`'s
+  token so a re-run doesn't break a bookmarked `/refresh` URL.
 - Non-`.py` files need a `rules` entry in `wrangler.jsonc` or they are silently left out of the bundle — that's
   what carries `src/config.yml`, the only one left. The frontend isn't bundled into the Python at all, it's
   `assets`.
@@ -210,9 +211,9 @@ and [README_Wrangler_dev.md](README_Wrangler_dev.md) (local dev, layout, depende
   pywrangler's `metadata.py` maps the date to a version: **2026-09-08 or later is Python 3.14**, anything older
   is 3.13. The 3.13 edge runtime does not put the bundled `python_modules` on `sys.path`, so the deploy is
   rejected with `ModuleNotFoundError` on the *first* vendored import (`import yaml`, in `entry.py`) while
-  `pnpm dev` boots the same bundle happily — workerd locally is fine with it. That is what the stale
+  `pnpm dev:cf` boots the same bundle happily — workerd locally is fine with it. That is what the stale
   `2026-08-01` pin here caused; don't lower it back. The ceiling is still the workerd binary wrangler ships
-  with: newer than that and `pnpm dev` won't start. The date also picks the Pyodide index the wheels come
+  with: newer than that and `pnpm dev:cf` won't start. The date also picks the Pyodide index the wheels come
   from, so after changing it delete `pylock.toml` (it pins the old ones), run `uv run pywrangler sync --force`,
   and re-run `pnpm check_worker`.
 - **The same `ModuleNotFoundError: No module named 'yaml'` also means `python_modules/` wasn't there.** It is
@@ -248,11 +249,11 @@ extras and dependency-groups are invisible to it — and compiles that list agai
 `--no-build`. So that list is exactly "what the Worker installs", and it is load-bearing:
 
 - `[project.dependencies]`: `httpx`, `pydantic`, `pyyaml`. All three have Pyodide wheels. Adding something
-  here without a Pyodide wheel breaks `pnpm dev`/`deploy` at the resolve step, not at runtime. So does raising
+  here without a Pyodide wheel breaks `pnpm dev:cf`/`deploy` at the resolve step, not at runtime. So does raising
   a floor past what the index for the current `compatibility_date` serves — `pydantic>=2.11` did exactly that
   back when the 3.13 index stopped at 2.10.6; the 3.14 index serves 2.12.5.
   `pnpm check_worker` ([`scripts/check-worker.sh`](scripts/check-worker.sh), also a CI job) is what catches
-  both: it starts `pnpm dev` — which resolves the list, builds the frontend, then boots the bundle in workerd —
+  both: it starts `pnpm dev:cf` — which resolves the list, builds the frontend, then boots the bundle in workerd —
   and fails unless an untokened `/refresh` comes back 404, `/status` returns its JSON, and the frontend is served
   from assets. Nothing in pytest runs a line of this under Pyodide.
 - `[project.optional-dependencies].server`: `fastapi`, `uvicorn`. `uv sync --extra server`. The `test`
@@ -343,7 +344,7 @@ wrangler var only exists on `env`, which the runtime hands to a handler, so it c
 uv run pytest                   # runs all tests
 uv run pytest -k test_name      # single test
 uv run pytest --random-order    # order independence
-pnpm test:frontend              # the frontend's node --test files
+pnpm test                       # vitest, then pytest
 ```
 
 - **Inventory fetches hit a real local HTTP server**, not a mocking library — `inventory_server` in

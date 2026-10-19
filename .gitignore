@@ -20,5 +20,6 @@ pylock.toml
 # Config for the web app
 instance/
 
-# Written by `pnpm build`
+# Written by `pnpm build` and `pnpm coverage`
 frontend/dist/
+frontend/coverage/

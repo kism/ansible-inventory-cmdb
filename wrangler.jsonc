@@ -7,16 +7,16 @@
   // Runs before every bundle, dev and deploy alike. pywrangler sync vendors the Python deps into python_modules/:
   // pywrangler dev/deploy already do this, but a plain `npx wrangler ...` (Workers Builds' `wrangler preview` for
   // PR builds) doesn't, and wrangler then silently ships a bundle with no packages: `ModuleNotFoundError: No
-  // module named 'yaml'` on upload. build:cf builds the frontend into the assets directory below, pointed at
-  // the API's domain by frontend/.env.cloudflare.
+  // module named 'yaml'` on upload. Then vite builds the frontend into the assets directory below, pointed at
+  // the API's domain by frontend/.env.cloudflare (--mode cloudflare).
   "build": {
-    "command": "uv run pywrangler sync && pnpm build:cf"
+    "command": "uv run pywrangler sync && pnpm exec vite build frontend --mode cloudflare"
   },
   // This date picks the edge's Python runtime, and it has a floor as well as a ceiling:
   //   - 2026-09-08 or later => Python 3.14 (pywrangler's metadata.py maps date -> version). Anything
   //     older lands on the 3.13 runtime, which does not put the bundled `python_modules` on sys.path:
   //     the deploy is rejected with `ModuleNotFoundError` on the first vendored import, while
-  //     `pnpm dev` boots fine. Don't lower this.
+  //     `pnpm dev:cf` boots fine. Don't lower this.
   //   - newer than the workerd binary wrangler ships with => `pywrangler dev` refuses to start
   // Changing it changes which Pyodide index the wheels come from, so re-run `uv run pywrangler sync
   // --force` (delete pylock.toml first, it pins the old ones) and `pnpm check_worker` after.
@@ -51,15 +51,14 @@
   },
   // The frontend's domain. wrangler creates the DNS record; the hostname must not already be in use.
   "routes": [{ "pattern": "cmdb.kierangee.au", "custom_domain": true }],
-  // Both explicit: declaring `routes` turns them off by default. scripts/build-token.sh and the docs reach /refresh
-  // and /status on the workers.dev URL, and Workers Builds' PR previews need preview_urls.
+  // Both explicit: declaring `routes` turns them off by default. Workers Builds' PR previews need preview_urls, and a
+  // fork without a custom domain has only the workers.dev URL.
   "workers_dev": true,
   "preview_urls": true,
   // The API. This, the route above, the cron, src/config.yml and frontend/.env.cloudflare are the whole
-  // deployment. Forking to run your own? Change the bucket name here and in package.json's `bucket`/`domain`/
-  // `cors` scripts, both domains, and the inventories in src/config.yml. Create the bucket with `pnpm bucket`,
-  // put it on the API's domain with `pnpm domain` (CF_ZONE_ID=<zone id from the domain's dashboard overview>)
-  // — https://cmdb-api.kierangee.au here — and let the frontend read it cross-origin with `pnpm cors`.
+  // deployment. Forking to run your own? Change the Worker name, the bucket name, the route above, the API's
+  // domain in frontend/.env.cloudflare and the inventories in src/config.yml, then `pnpm provision`: it reads
+  // all of those and creates the bucket, its CORS policy and domain, and the BUILD_TOKEN secret.
   "r2_buckets": [
     {
       "binding": "CMDB_BUCKET",
