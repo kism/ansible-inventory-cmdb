@@ -11,7 +11,6 @@ uv sync --extra server      # ...plus the FastAPI web app
 nvm install                 # node 26, from .nvmrc
 pnpm install                # wrangler, biome, vite and typescript, pinned in package.json; pnpm itself by packageManager
 pnpm build                  # the frontend, into frontend/dist, which the web app serves
-pnpm fonts                  # copies frontend/public/static/fonts from the @fontsource packages, see below
 scripts/build-token.sh set  # BUILD_TOKEN, needed before the Worker's /refresh endpoint works
 ```
 
@@ -49,10 +48,10 @@ the Worker can't run belongs in the `server` extra. See *Dependency layout* belo
 | Worker dev / deploy     | `pnpm dev` / `pnpm run deploy` (from the repo root)                        |
 | Check the Worker boots  | `pnpm check_worker` (from the repo root)                                   |
 
-Biome lints and formats everything that isn't Python — the frontend's TypeScript, `sorttable.js`, `zy.css`, the
+Biome lints and formats everything that isn't Python — the frontend's TypeScript, `zy.css`, the
 JSON(C) — with the same 120 columns as ruff. CI has one workflow per check (`lint.yml`, `check_types.yml`,
-`test.yml`, `build.yml`), so a failing badge names what broke; `build.yml` is the fonts check, `check_worker`,
-and the frontend's tsc, tests and build.
+`test.yml`, `build.yml`), so a failing badge names what broke; `build.yml` is `check_worker` and the frontend's
+tsc, tests and build.
 
 ## Architecture
 
@@ -122,7 +121,8 @@ Worker PUTs it into R2 at `<key>`. **Both hosts go through `build_api`**, which 
 ### The frontend
 
 [`frontend/src/main.ts`](frontend/src/main.ts) routes on `location.pathname`, fetches the one API object a page
-needs, and renders it into `#app`. Built by Vite into `frontend/dist/` (gitignored).
+needs, and renders it into `#app`. `get()` keeps every response in a per-tab `Map`, and the inventory view prefetches
+all its host and group objects at low fetch priority, so clicking through renders from memory. Built by Vite into `frontend/dist/` (gitignored).
 
 - **Every interpolation goes through `` html`...` ``** ([`html.ts`](frontend/src/html.ts)), which escapes
   anything that isn't another `html` fragment. Inventory values come from someone's git repo and end up in
@@ -133,11 +133,14 @@ needs, and renders it into `#app`. Built by Vite into `frontend/dist/` (gitignor
   wrangler's `build.command` runs `build:cf`, so `pnpm dev`, deploy and Workers Builds previews always get it.
 - **Both hosts answer any non-file path with `index.html`** — `SPAStaticFiles` in the web app,
   `not_found_handling: single-page-application` on the Worker — which is how a reload on
-  `/inventory/x/host/y` works. Links are plain navigations; there is no pushState routing. The router strips a
+  `/inventory/x/host/y` works. A click on an in-app link is caught and rendered with pushState; off-site links and the API's own JSON
+  links are left to the browser. The router strips a
   trailing `/index.html`, so links into the old static site still land.
 - `frontend/public/` is copied into `dist/` as is, so `public/static/` is served at `/static/`.
-  `sorttable.js` stays a classic script, not bundled: it defines the global `sortTable()` the hosts table's
-  inline `onclick` calls.
+- The hosts table sorts by a heading's column on click and by `IP Address` on render
+  ([`sort.ts`](frontend/src/sort.ts)), from `render()` and a delegated listener — no inline `onclick`, since the
+  markup is `innerHTML`. It used to be a classic `sorttable.js`, whose sort-on-load ran before the SPA had
+  rendered the table.
 - Imports carry their `.ts` extension (`allowImportingTsExtensions`, `erasableSyntaxOnly`), so `node --test`
   runs the same files under Node 26's type stripping with no test framework. `*.test.ts` is excluded from tsc,
   which would otherwise need `@types/node` for two imports. Root `package.json` is `"type": "module"` for the
@@ -145,15 +148,10 @@ needs, and renders it into `#app`. Built by Vite into `frontend/dist/` (gitignor
 - The web app serves `FRONTEND_DIR`, `frontend/dist` in the checkout — it's not shipped in the wheel. Missing,
   it logs a warning and serves the API only.
 
-The `.woff2` files under `frontend/public/static/fonts/` are checked in, but generated: `pnpm fonts`
-([`scripts/fetch-fonts.sh`](scripts/fetch-fonts.sh)) copies the latin, non-variable weights `zy.css`'s
-`@font-face` rules reference out of the `@fontsource/fira-code`/`@fontsource/noto-sans-display` devDependencies,
-under the existing filenames. Re-run it after bumping either package or adding a weight to `zy.css`; don't
-hand-edit the `.woff2` files. `pnpm check_fonts` ([`scripts/check-fonts.sh`](scripts/check-fonts.sh), also a CI
-job) is what catches forgetting to: it greps the `url(...)` of every `@font-face` rule out of `zy.css` and checks
-each file is present and starts with the `wOF2` magic number. It reads the paths off the stylesheet rather than a
-hardcoded list, so adding a weight needs no change here. This used to load the sheet in headless chromium via
-playwright; don't bring that back for what four lines of shell cover.
+The fonts are the `@fontsource/fira-code`/`@fontsource/noto-sans-display` devDependencies, imported as CSS at the
+top of `main.ts`, so Vite bundles the `@font-face` rules and the woff2 files into `dist/assets/` with hashed names.
+Adding a weight is adding an import. There used to be checked-in woff2 copies, a script to refresh them and a CI
+check that they existed; all gone, since a missing file is now a build error.
 
 ### Cloudflare Worker mode
 

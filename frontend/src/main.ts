@@ -2,9 +2,22 @@
 //
 // The same build runs on both hosts. Locally the web app serves it next to the API, so the API is /api on the same
 // origin; the Cloudflare build sets VITE_API_BASE (frontend/.env.cloudflare) to the bucket's domain.
-// Links are plain navigations; both hosts answer any non-file path with index.html, so every URL lands back here.
+// Links into the app are caught and rendered in place (pushState), so the in-memory API cache below survives
+// clicking through. A reload or deep link still works: both hosts answer any non-file path with index.html.
 
+// Bundled by Vite, woff2 files and all. latin only, and only the weights zy.css uses: Noto's 600 is what <b> gets
+// instead of a synthesised bold over the 500 body text.
+import '@fontsource/fira-code/latin-400.css'
+import '@fontsource/fira-code/latin-500.css'
+import '@fontsource/fira-code/latin-600.css'
+import '@fontsource/fira-code/latin-700.css'
+import '@fontsource/noto-sans-display/latin-400.css'
+import '@fontsource/noto-sans-display/latin-400-italic.css'
+import '@fontsource/noto-sans-display/latin-500.css'
+import '@fontsource/noto-sans-display/latin-500-italic.css'
+import '@fontsource/noto-sans-display/latin-600.css'
 import { html, type SafeHtml } from './html.ts'
+import { sortByHeading, sortTable } from './sort.ts'
 
 const API: string = import.meta.env.VITE_API_BASE ?? '/api'
 
@@ -32,10 +45,22 @@ type Page = { title: string; body: SafeHtml }
 
 const seg = encodeURIComponent
 
-async function get<T>(key: string): Promise<T> {
-  const response = await fetch(`${API}/${key}`)
-  if (!response.ok) throw new Error(`${key}: HTTP ${response.status}`)
-  return response.json()
+// ponytail: kept for the life of the tab, so a tab left open past a rebuild shows the old data until reloaded.
+const cache = new Map<string, Promise<unknown>>()
+
+function get<T>(key: string, priority: RequestPriority = 'auto'): Promise<T> {
+  let body = cache.get(key)
+  if (!body) {
+    body = fetch(`${API}/${key}`, { priority }).then((response) => {
+      if (!response.ok) throw new Error(`${key}: HTTP ${response.status}`)
+      return response.json()
+    })
+    // A failed fetch is forgotten so the next visit retries it. This also handles the rejection for prefetches,
+    // which nothing awaits.
+    body.catch(() => cache.delete(key))
+    cache.set(key, body)
+  }
+  return body as Promise<T>
 }
 
 const homeLink = html`<a href="/">Inventories</a>`
@@ -78,7 +103,12 @@ async function inventory(name: string): Promise<Page> {
   const base = `/inventory/${seg(name)}`
   const columns = Object.entries(inv.schema_mapping)
 
-  const header = columns.map(([, heading], i) => html`<th onclick="sortTable(${i})">${heading}</th>`)
+  // Every vars page this one links to, fetched at low priority so clicking through renders from memory.
+  for (const host of Object.keys(inv.hosts)) get(`inventory/${seg(name)}/host/${seg(host)}.json`, 'low')
+  const linkedGroups = new Set(Object.values(inv.hosts).flatMap((host) => host.groups)) // includes 'all'
+  for (const group of linkedGroups) get(`inventory/${seg(name)}/group/${seg(group)}.json`, 'low')
+
+  const header = columns.map(([, heading]) => html`<th>${heading}</th>`)
   const rows = Object.entries(inv.hosts).map(
     ([host, data]) => html`
             <tr>
@@ -134,12 +164,16 @@ async function route(path: string): Promise<Page> {
   return { title: 'Not found', body: html`<p>${homeLink}</p><p>No such page.</p>` }
 }
 
-async function main(): Promise<void> {
+async function render(): Promise<void> {
   const app = document.getElementById('app') as HTMLElement
+  const path = location.pathname
   try {
-    const page = await route(location.pathname)
+    const page = await route(path)
+    if (path !== location.pathname) return // navigated again while this one was loading
     document.title = page.title
     app.innerHTML = page.body.toString()
+    const hosts = document.getElementById('Hosts')
+    if (hosts instanceof HTMLTableElement) sortByHeading(hosts, 'IP Address')
   } catch (error) {
     // Before the first build the API has nothing: a 503 from the web app, a 404 from the bucket.
     app.innerHTML = html`<p>${homeLink}</p>
@@ -148,4 +182,24 @@ async function main(): Promise<void> {
   }
 }
 
-main()
+document.addEventListener('click', (event) => {
+  const link = (event.target as Element).closest('a')
+  if (!link || link.target || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    return
+  }
+  const url = new URL(link.href)
+  // Off-site links and the raw API JSON (same origin under the web app's /api) are left to the browser.
+  if (url.origin !== location.origin || url.pathname.startsWith(`${API}/`)) return
+  event.preventDefault()
+  history.pushState(null, '', url)
+  render().then(() => scrollTo(0, 0))
+})
+addEventListener('popstate', render)
+
+document.addEventListener('click', (event) => {
+  const heading = (event.target as Element).closest('#Hosts th')
+  if (heading instanceof HTMLTableCellElement)
+    sortTable(heading.closest('table') as HTMLTableElement, heading.cellIndex)
+})
+
+render()

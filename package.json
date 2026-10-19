@@ -13,8 +13,6 @@
     "build": "vite build frontend",
     "build:cf": "vite build frontend --mode cloudflare",
     "frontend": "vite frontend",
-    "fonts": "scripts/fetch-fonts.sh",
-    "check_fonts": "scripts/check-fonts.sh",
     "check_worker": "scripts/check-worker.sh",
     "login": "wrangler login --browser false",
     "bucket": "wrangler r2 bucket create ansible-inventory-cmdb",

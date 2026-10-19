@@ -22,8 +22,5 @@ print_heading "Frontend"
 pnpm test:frontend
 pnpm build
 
-print_heading "Fonts"
-pnpm check_fonts
-
 print_heading "Worker (Pyodide)"
 pnpm check_worker

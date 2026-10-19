@@ -19,19 +19,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  fonts:
-    name: Fonts
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
-        with:
-          lfs: true
-
-      - name: Check every woff2 zy.css references is present and valid
-        run: scripts/check-fonts.sh
-
   worker:
     name: Worker
     runs-on: ubuntu-latest

@@ -121,7 +121,6 @@ pnpm test                    # pytest, args pass through: pnpm test -k name
 pnpm test:frontend           # the frontend's node --test files
 pnpm build                   # the frontend, into frontend/dist
 pnpm coverage                # pytest under coverage
-pnpm check_fonts             # every woff2 zy.css references exists
 pnpm check_worker            # boots the Worker under Pyodide, see README_Wrangler_dev.md
 ```
 
@@ -136,7 +135,7 @@ The `.github` folder has one workflow per check, so a failing badge tells you wh
 | `lint.yml`        | Ruff and Biome                                             |
 | `check_types.yml` | ty                                                         |
 | `test.yml`        | pytest with coverage, uploaded to Codecov                  |
-| `build.yml`       | `scripts/check-fonts.sh`, `pnpm check_worker`, and the frontend's tsc, tests and build |
+| `build.yml`       | `pnpm check_worker`, and the frontend's tsc, tests and build |
 
 Dependabot PRs are merged automatically once checks pass (`dependabot_automerge.yml`).
 
