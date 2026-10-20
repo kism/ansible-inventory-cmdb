@@ -36,7 +36,7 @@ jobs:
           python-version: "3.14"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6 # Version comes from packageManager in package.json
+        uses: pnpm/setup@v3 # Version comes from packageManager in package.json
 
       - name: Setup Node
         uses: actions/setup-node@v7
