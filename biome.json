@@ -6,6 +6,7 @@
     "useIgnoreFile": true
   },
   "formatter": {
+    "includes": ["**", "!pnpm-lock.yaml"],
     "indentStyle": "space",
     "lineWidth": 120
   },
