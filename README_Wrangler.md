@@ -117,10 +117,10 @@ minutes after a run had demonstrably written every object.
 
 ## Domains
 
-| Domain                | Serves                     | Set up by                                             |
-| --------------------- | -------------------------- | ----------------------------------------------------- |
-| cmdb.kierangee.au     | the frontend, `/refresh`, `/status` | `routes` in `wrangler.jsonc`, on deploy |
-| cmdb-api.kierangee.au | the API, straight out of R2 | `pnpm provision`, along with its CORS policy |
+| Domain                | Serves                              | Set up by                                    |
+| --------------------- | ----------------------------------- | -------------------------------------------- |
+| cmdb.kierangee.au     | the frontend, `/refresh`, `/status` | `routes` in `wrangler.jsonc`, on deploy      |
+| cmdb-api.kierangee.au | the API, straight out of R2         | `pnpm provision`, along with its CORS policy |
 
 The API's keys all end in `.json` (`inventories.json`, `inventory/<name>/host/<host>.json`, ...), so R2 serves
 every one of them as is: no index document, no rewrite rule. The frontend is a single-page app, and the Worker's

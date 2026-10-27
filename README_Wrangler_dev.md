@@ -11,7 +11,7 @@ curl http://localhost:8787/cdn-cgi/handler/scheduled   # cron triggers don't fir
 ```
 
 `pnpm dev:cf` builds the frontend first (wrangler's `build.command` runs vite in `cloudflare` mode) and serves it on the same
-port. That is the Cloudflare build, so it reads the *real* API at cmdb-api.kierangee.au, not the local simulated
+port. That is the Cloudflare build, so it reads the _real_ API at cmdb-api.kierangee.au, not the local simulated
 bucket. To look at the pages a local build produced, use the web app; both build through the same `api.py`.
 
 `pnpm check_worker` is the same thing without the babysitting: it starts the dev server, waits for an
@@ -27,7 +27,7 @@ dev server reads `BUILD_TOKEN` from `.dev.vars`, which `pnpm provision` wrote, s
 curl -X POST -H "Authorization: Bearer $(sed -n 's/^BUILD_TOKEN="\(.*\)"/\1/p' .dev.vars)" localhost:8787/refresh
 ```
 
-To seed the *real* bucket from a local run, temporarily add `"remote": true` to the R2 binding in
+To seed the _real_ bucket from a local run, temporarily add `"remote": true` to the R2 binding in
 `wrangler.jsonc`. Take it back out afterwards — left in, every local dev run overwrites production.
 
 ## Don't change `compatibility_date` casually
@@ -55,16 +55,16 @@ pnpm check_worker
 
 ## Layout
 
-| Path                               | Role                                                            |
-| ---------------------------------- | --------------------------------------------------------------- |
-| [`src/entry.py`](src/entry.py)     | `scheduled` (cron) and `fetch` (ad-hoc, token-guarded) handlers |
-| [`src/config.yml`](src/config.yml) | The Worker's config, tracked and bundled with it                |
-| [`wrangler.jsonc`](wrangler.jsonc) | Cron, R2 binding, module rules, assets, the frontend's domain   |
-| [`frontend/`](frontend/)           | The TypeScript frontend, the Worker's static assets once built  |
-| [`frontend/.env.cloudflare`](frontend/.env.cloudflare) | The API's URL, baked into the Cloudflare build |
-| [`pyproject.toml`](pyproject.toml) | One project for both hosts, see below                           |
-| [`package.json`](package.json)     | Pins wrangler, vite and typescript, and defines every pnpm script |
-| [`scripts/provision.sh`](scripts/provision.sh) | `pnpm provision`: bucket, CORS, API domain, `BUILD_TOKEN` |
+| Path                                                   | Role                                                              |
+| ------------------------------------------------------ | ----------------------------------------------------------------- |
+| [`src/entry.py`](src/entry.py)                         | `scheduled` (cron) and `fetch` (ad-hoc, token-guarded) handlers   |
+| [`src/config.yml`](src/config.yml)                     | The Worker's config, tracked and bundled with it                  |
+| [`wrangler.jsonc`](wrangler.jsonc)                     | Cron, R2 binding, module rules, assets, the frontend's domain     |
+| [`frontend/`](frontend/)                               | The TypeScript frontend, the Worker's static assets once built    |
+| [`frontend/.env.cloudflare`](frontend/.env.cloudflare) | The API's URL, baked into the Cloudflare build                    |
+| [`pyproject.toml`](pyproject.toml)                     | One project for both hosts, see below                             |
+| [`package.json`](package.json)                         | Pins wrangler, vite and typescript, and defines every pnpm script |
+| [`scripts/provision.sh`](scripts/provision.sh)         | `pnpm provision`: bucket, CORS, API domain, `BUILD_TOKEN`         |
 
 `src/entry.py` sits beside `src/ansibleinventorycmdb/` on purpose. wrangler bundles everything under the
 entrypoint's directory, so the package ships at the same path the entrypoint imports it from, with no copying,
@@ -90,9 +90,9 @@ patched `httpx` that goes through the JS `fetch` API, which is why that's the cl
 
 All gitignored, all self-maintaining — there is nothing to run by hand:
 
-| Path              | Made by                             | Refreshed when                                                          |
-| ----------------- | ----------------------------------- | ----------------------------------------------------------------------- |
+| Path              | Made by                             | Refreshed when                                                           |
+| ----------------- | ----------------------------------- | ------------------------------------------------------------------------ |
 | `python_modules/` | `pywrangler`, from `pylock.toml`    | when `pyproject.toml` or `pylock.toml` is newer than its `.synced` token |
 | `pylock.toml`     | `pywrangler`, from `pyproject.toml` | on sync; it then constrains later resolves so versions don't drift       |
 | `.venv-workers/`  | `pywrangler`                        | alongside `python_modules`, for editor/type support                      |
-| `frontend/dist/`  | vite, via `build.command`           | before every `pnpm dev:cf`/deploy bundle                                   |
+| `frontend/dist/`  | vite, via `build.command`           | before every `pnpm dev:cf`/deploy bundle                                 |

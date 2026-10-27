@@ -8,7 +8,6 @@ all:
       ansible_host: hosttwo.pytest.internal
       ansible_host_description: Host Two
 
-
 # Server Type
 groupone:
   hosts:

@@ -65,13 +65,13 @@ passing `--var COMMIT_SHA:$(git rev-parse --short HEAD)`.
 
 ### Endpoints
 
-| Path            | What                                                                                   |
-| --------------- | -------------------------------------------------------------------------------------- |
-| `/`, `/inventory/...` | The frontend. Any path that isn't a file gets the app, which routes on the URL    |
-| `/api/<key>`    | The API: `inventories.json`, `inventory/<name>.json`, and a `.json` per host and group |
-| `/api/inventory/<name>/group/<group>/hosts.json` | Hostname to vars for every host in a group, `all` included |
-| `/status`       | When the API was last built, 503 once the next refresh is more than two hours overdue  |
-| `/health`       | The version                                                                            |
+| Path                                             | What                                                                                   |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `/`, `/inventory/...`                            | The frontend. Any path that isn't a file gets the app, which routes on the URL         |
+| `/api/<key>`                                     | The API: `inventories.json`, `inventory/<name>.json`, and a `.json` per host and group |
+| `/api/inventory/<name>/group/<group>/hosts.json` | Hostname to vars for every host in a group, `all` included                             |
+| `/status`                                        | When the API was last built, 503 once the next refresh is more than two hours overdue  |
+| `/health`                                        | The version                                                                            |
 
 The Worker serves the same API keys from its bucket's domain, and the same `/status`.
 
@@ -129,11 +129,11 @@ pnpm check_worker            # boots the Worker under Pyodide, see README_Wrangl
 
 The `.github` folder has one workflow per check, so a failing badge tells you what broke:
 
-| Workflow          | Runs                                                       |
-| ----------------- | ---------------------------------------------------------- |
-| `lint.yml`        | Ruff and Biome                                             |
-| `check_types.yml` | ty                                                         |
-| `test.yml`        | vitest and pytest with coverage, uploaded to Codecov       |
+| Workflow          | Runs                                                  |
+| ----------------- | ----------------------------------------------------- |
+| `lint.yml`        | Ruff and Biome                                        |
+| `check_types.yml` | ty                                                    |
+| `test.yml`        | vitest and pytest with coverage, uploaded to Codecov  |
 | `build.yml`       | `pnpm check_worker`, and the frontend's tsc and build |
 
 Dependabot PRs are merged automatically once checks pass (`dependabot_automerge.yml`).

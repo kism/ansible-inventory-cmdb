@@ -31,7 +31,7 @@ needs one, `pnpm install` stops and names it; approve it with `pnpm approve-buil
 
 One `pyproject.toml` covers both hosts. **`[project.dependencies]` is the Worker's install list** — pywrangler
 reads it and nothing else (no extras, no dependency-groups) and resolves it against the Pyodide index, so anything
-the Worker can't run belongs in the `server` extra. See *Dependency layout* below.
+the Worker can't run belongs in the `server` extra. See _Dependency layout_ below.
 
 ## Essential Commands
 
@@ -73,18 +73,18 @@ serves the frontend its own native way (`StaticFiles` vs Workers Static Assets);
 
 src layout, installed as a package (hatchling). Imports are `ansibleinventorycmdb.*`, not path-relative.
 
-| Module                                                                         | Role                                                                              |
-| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| [`src/ansibleinventorycmdb/__init__.py`](src/ansibleinventorycmdb/__init__.py) | Docstring only. Importing the package must not pull in FastAPI, see below          |
-| [`src/ansibleinventorycmdb/app.py`](src/ansibleinventorycmdb/app.py)          | `create_app()`, the lifespan that owns the refresh task, `SPAStaticFiles`         |
-| [`src/ansibleinventorycmdb/__main__.py`](src/ansibleinventorycmdb/__main__.py) | `main()`, the `ansibleinventorycmdb` console script, runs uvicorn                 |
-| [`src/ansibleinventorycmdb/routes.py`](src/ansibleinventorycmdb/routes.py)     | `APIRouter`: `/api/{key}` out of memory, `/status`, `/health`, the refresh loop  |
-| [`src/ansibleinventorycmdb/api.py`](src/ansibleinventorycmdb/api.py)          | The API renderer both hosts build through. No FastAPI imports                     |
+| Module                                                                         | Role                                                                                 |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| [`src/ansibleinventorycmdb/__init__.py`](src/ansibleinventorycmdb/__init__.py) | Docstring only. Importing the package must not pull in FastAPI, see below            |
+| [`src/ansibleinventorycmdb/app.py`](src/ansibleinventorycmdb/app.py)           | `create_app()`, the lifespan that owns the refresh task, `SPAStaticFiles`            |
+| [`src/ansibleinventorycmdb/__main__.py`](src/ansibleinventorycmdb/__main__.py) | `main()`, the `ansibleinventorycmdb` console script, runs uvicorn                    |
+| [`src/ansibleinventorycmdb/routes.py`](src/ansibleinventorycmdb/routes.py)     | `APIRouter`: `/api/{key}` out of memory, `/status`, `/health`, the refresh loop      |
+| [`src/ansibleinventorycmdb/api.py`](src/ansibleinventorycmdb/api.py)           | The API renderer both hosts build through. No FastAPI imports                        |
 | [`src/ansibleinventorycmdb/cmdb.py`](src/ansibleinventorycmdb/cmdb.py)         | `AnsibleCMDB`: fetches inventory URLs, parses hosts/groups/vars, per-build URL cache |
-| [`src/ansibleinventorycmdb/config.py`](src/ansibleinventorycmdb/config.py)     | pydantic `Config`/`Inventory` models and `load_config()`                          |
-| [`src/ansibleinventorycmdb/logger.py`](src/ansibleinventorycmdb/logger.py)     | `LoggingConfig` and `setup_logger`: one console handler, optionally a file one     |
-| [`src/entry.py`](src/entry.py)                                                | The Cloudflare Worker's entrypoint. Not part of the package, see below           |
-| [`frontend/`](frontend/)                                                      | The TypeScript SPA (Vite, no framework). Not part of the package either          |
+| [`src/ansibleinventorycmdb/config.py`](src/ansibleinventorycmdb/config.py)     | pydantic `Config`/`Inventory` models and `load_config()`                             |
+| [`src/ansibleinventorycmdb/logger.py`](src/ansibleinventorycmdb/logger.py)     | `LoggingConfig` and `setup_logger`: one console handler, optionally a file one       |
+| [`src/entry.py`](src/entry.py)                                                 | The Cloudflare Worker's entrypoint. Not part of the package, see below               |
+| [`frontend/`](frontend/)                                                       | The TypeScript SPA (Vite, no framework). Not part of the package either              |
 
 `requires-python` is `>=3.13`, a floor below the 3.14 the Worker's Pyodide now runs. On 3.13 annotations are
 evaluated at definition time, so any module with a `TYPE_CHECKING`-only import used in a signature needs
@@ -97,14 +97,13 @@ evaluated at definition time, so any module with a `TYPE_CHECKING`-only import u
 Worker PUTs it into R2 at `<key>`. **Both hosts go through `build_api`**, which is what keeps them from drifting —
 `test_serves_every_object` checks the web app returns every object byte for byte.
 
-| Key                                         | Body                                                   |
-| ------------------------------------------- | ------------------------------------------------------ |
+| Key                                         | Body                                                                  |
+| ------------------------------------------- | --------------------------------------------------------------------- |
 | `inventories.json`                          | `{version, repo_url, built_at, inventories: {name: {url, base_url}}}` |
-| `inventory/{name}.json`                     | `{schema_mapping, groups, hosts: {host: {groups, vars}}}` |
-| `inventory/{name}/host/{host}.json`         | `{groups, vars, vars_yaml}`                            |
-| `inventory/{name}/group/{group}.json`       | `{vars, vars_yaml}`                                    |
-| `inventory/{name}/group/{group}/hosts.json` | hostname → vars for the group; `all` included          |
-
+| `inventory/{name}.json`                     | `{schema_mapping, groups, hosts: {host: {groups, vars}}}`             |
+| `inventory/{name}/host/{host}.json`         | `{groups, vars, vars_yaml}`                                           |
+| `inventory/{name}/group/{group}.json`       | `{vars, vars_yaml}`                                                   |
+| `inventory/{name}/group/{group}/hosts.json` | hostname → vars for the group; `all` included                         |
 - `api.py` must not import FastAPI. It is the lower layer, and the Worker doesn't install FastAPI.
 - **Every key ends in `.json`.** That's what keeps `inventory/x.json` from shadowing the "directory"
   `inventory/x/` its children live in — R2's flat keyspace tolerates that, a filesystem doesn't — and why R2
@@ -144,7 +143,7 @@ all its host and group objects at low fetch priority, so clicking through render
   rendered the table.
 - Tests are vitest, `src/*.test.ts` next to what they test, run with `--root frontend` so they share
   `vite.config.ts` (its `test` block holds the coverage settings). `pnpm test`/`pnpm coverage` run vitest
-  *first*, so trailing args land on pytest. Root `package.json` is `"type": "module"` so Vite loads its config
+  _first_, so trailing args land on pytest. Root `package.json` is `"type": "module"` so Vite loads its config
   as ESM.
 - The web app serves `FRONTEND_DIR`, `frontend/dist` in the checkout — it's not shipped in the wheel. Missing,
   it logs a warning and serves the API only.
@@ -173,10 +172,10 @@ and [README_Wrangler_dev.md](README_Wrangler_dev.md) (local dev, layout, depende
   Workers SDK, a plain JS object comes back as a dict (`listed["objects"]`) while R2Object instances keep
   attribute access (`obj.key`, `index.uploaded`).
 - `run_worker_first: ["/refresh", "/status"]` in `assets`: at this `compatibility_date` the SPA fallback serves
-  `index.html` to *navigation* requests before the Worker sees them, which would turn the bookmarkable
+  `index.html` to _navigation_ requests before the Worker sees them, which would turn the bookmarkable
   `/refresh?token=` URL into the home page.
 - **`wrangler.jsonc` has to sit next to `pyproject.toml`.** pywrangler takes the directory of the nearest
-  `pyproject.toml` above the cwd as the project root and looks for the wrangler config *there*; `pylock.toml`,
+  `pyproject.toml` above the cwd as the project root and looks for the wrangler config _there_; `pylock.toml`,
   `python_modules/` and `.venv-workers/` are written there too. That's why all of it is at the repo root and there
   is no `worker/` directory.
 - **The Worker bundles the package because it's a sibling of the entrypoint, not because of a build step.**
@@ -184,7 +183,7 @@ and [README_Wrangler_dev.md](README_Wrangler_dev.md) (local dev, layout, depende
   bundle at the same path it is imported from. There used to be an `rm -rf` + `cp -r` build command faking this;
   don't bring it back. `.pyc` files aren't a problem — no module rule matches them.
 - `src/entry.py` is excluded from `ty` in `pyproject.toml`; its `workers` import only resolves inside
-  Pyodide. It is deliberately *not* inside the package: in the bundle it's a top-level module, so it needs the
+  Pyodide. It is deliberately _not_ inside the package: in the bundle it's a top-level module, so it needs the
   absolute `ansibleinventorycmdb.*` imports it has.
 - **The deployment is the repo**, not arguments to `deploy`: `wrangler.jsonc` holds the bucket, cron, assets,
   module rules and the frontend's domain, `src/config.yml` the inventories, `frontend/.env.cloudflare` the API's
@@ -210,7 +209,7 @@ and [README_Wrangler_dev.md](README_Wrangler_dev.md) (local dev, layout, depende
 - **`compatibility_date` selects the edge's Python runtime, and it has a floor as well as a ceiling.**
   pywrangler's `metadata.py` maps the date to a version: **2026-09-08 or later is Python 3.14**, anything older
   is 3.13. The 3.13 edge runtime does not put the bundled `python_modules` on `sys.path`, so the deploy is
-  rejected with `ModuleNotFoundError` on the *first* vendored import (`import yaml`, in `entry.py`) while
+  rejected with `ModuleNotFoundError` on the _first_ vendored import (`import yaml`, in `entry.py`) while
   `pnpm dev:cf` boots the same bundle happily — workerd locally is fine with it. That is what the stale
   `2026-08-01` pin here caused; don't lower it back. The ceiling is still the workerd binary wrangler ships
   with: newer than that and `pnpm dev:cf` won't start. The date also picks the Pyodide index the wheels come
@@ -221,7 +220,7 @@ and [README_Wrangler_dev.md](README_Wrangler_dev.md) (local dev, layout, depende
   deploy left on the stock `npx wrangler deploy` skips it, and wrangler then ships a bundle with **no** vendored
   packages rather than erroring (the missing directory is a debug-level log line). Tell the two causes apart by
   `Total Upload`: ~8 MB with the packages, a few hundred KiB without. Build settings in README_Wrangler.md.
-- Trigger a local run with `curl http://localhost:8787/cdn-cgi/handler/scheduled`. A *deployed* cron trigger can't
+- Trigger a local run with `curl http://localhost:8787/cdn-cgi/handler/scheduled`. A _deployed_ cron trigger can't
   be fired on demand — `wrangler dev --remote` returns error 1042 rather than dispatching one — which is why
   `entry.py` has a `fetch` handler as well. Both handlers call `_build_and_upload`; keep it that way so the
   ad-hoc path can't drift from the scheduled one.
@@ -262,7 +261,7 @@ extras and dependency-groups are invisible to it — and compiles that list agai
   works after a plain `uv sync`. CI passes `--no-group worker`.
 - **`aiohttp` is not an option here.** `aiohttp>=3.14.3` has no usable wasm wheel at all, and unpinned it resolves
   to the socket-based build that dies under Pyodide with `RuntimeError("SSL is not supported.")`. The Pyodide index
-  serves its *own* `httpx` wheel (different sha256 from PyPI's, and no `httpcore`/`anyio`/`certifi` in its
+  serves its _own_ `httpx` wheel (different sha256 from PyPI's, and no `httpcore`/`anyio`/`certifi` in its
   metadata) patched to use the JS `fetch` API, which is why httpx is the one that works in both places.
 - The frontend's dependencies are devDependencies in the root `package.json` (`vite`, `typescript`); it has no
   runtime ones. One `package.json`, no workspace.
@@ -276,7 +275,7 @@ extras and dependency-groups are invisible to it — and compiles that list agai
   HTML error pages: the frontend renders a failed fetch itself.
 - The refresh task replaces `app.state.api` only once a build has succeeded, so a failed build keeps serving the
   last good one — the same as the bucket does.
-- The frontend is mounted at `/` *after* the router, so API routes are matched first and an API miss stays an
+- The frontend is mounted at `/` _after_ the router, so API routes are matched first and an API miss stays an
   API error rather than becoming `index.html`.
 - `logger` in `app.py` is named `_logger`, because `ansibleinventorycmdb.logger` is a submodule.
 
@@ -302,13 +301,13 @@ read the already-built `app.state.api` — they never fetch.
   call `raise_for_status()`. A host or group with no vars file 404s on every single build — that's the normal case,
   and it has to come back as `None`, not an exception. httpx's own INFO logging is turned down in `logger.py`,
   it logs a line per request.
-- Per-host and per-group var fetches are `asyncio.gather`ed. The two URLs *within* `_set_host_vars`/`_set_group_vars`
+- Per-host and per-group var fetches are `asyncio.gather`ed. The two URLs _within_ `_set_host_vars`/`_set_group_vars`
   stay sequential, because the `inventory/` path deliberately overrides the top-level one.
 - `CONCURRENT_REQUEST_LIMIT` caps an `asyncio.Semaphore` held across each fetch, recreated per `build()` because
   an asyncio primitive binds to the loop that first awaits it. A semaphore rather than a client-level connection
   limit, because the client isn't in the picture on the Worker's path. Raising it hammers whatever hosts the
   inventory.
-- **`AnsibleCMDB` writes nothing to disk, in any mode.** `url_cache` dedupes fetches *within* one build — a
+- **`AnsibleCMDB` writes nothing to disk, in any mode.** `url_cache` dedupes fetches _within_ one build — a
   group's vars file is otherwise probed once per host in it — and is dropped after. There used to be a pickled
   `url_cache.pkl` and a `cmdb_dump.yml` under the instance path; don't reintroduce either. Nothing read the dump,
   and the pickle's only effect was that the first pages after a restart served yesterday's data before the real
