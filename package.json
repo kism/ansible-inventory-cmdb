@@ -18,13 +18,13 @@
     "provision": "scripts/provision.sh"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.7",
+    "@biomejs/biome": "^2.6.8",
     "@fontsource/fira-code": "^5.3.0",
     "@fontsource/noto-sans-display": "^5.3.0",
-    "@vitest/coverage-v8": "^5.1.0",
+    "@vitest/coverage-v8": "^5.1.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
-    "vitest": "^5.1.0",
-    "wrangler": "^4.162.0"
+    "vitest": "^5.1.1",
+    "wrangler": "^4.166.0"
   }
 }
