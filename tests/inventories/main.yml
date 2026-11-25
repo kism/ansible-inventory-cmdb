@@ -4,6 +4,7 @@ all:
     hostone:
       ansible_host: hostone.pytest.internal
       ansible_host_description: Host One
+      templated_var: "{{ ansible_host }}"
     hosttwo:
       ansible_host: hosttwo.pytest.internal
       ansible_host_description: Host Two

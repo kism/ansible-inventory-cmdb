@@ -31,6 +31,44 @@ CONCURRENT_REQUEST_LIMIT = 10  # Be polite to whatever is hosting the inventory
 # back to being fetched a file at a time — the branch and the path would be ambiguous.
 GITHUB_RAW_URL = re.compile(r"https://raw\.githubusercontent\.com/([^/]+/[^/]+)/refs/heads/([^/]+)/(.+)")
 
+# A bare `{{ name }}`. Anything else in braces — a lookup, a filter — is left as written.
+JINJA_VAR = re.compile(r"\{\{\s*([A-Za-z_]\w*)\s*\}\}")
+MAX_TEMPLATE_DEPTH = 10  # How far a chain of references is followed, which is also what stops a cycle
+
+
+def resolve_vars(values: dict, context: dict) -> dict:
+    """Return a copy of `values` with every bare `{{ name }}` replaced by `context[name]`, where possible.
+
+    ponytail: bare {{ var }} only, not Jinja. A lookup can't be evaluated here anyway (they're mostly secrets), and
+    rendering templates out of someone's repo is template injection. Add a sandboxed jinja2 if filters are needed.
+
+    A reference is substituted only if its value resolves to a scalar with no `{{` left in it, so anything that
+    leads to a lookup, a list or an unknown name stays exactly as the inventory wrote it.
+    """
+
+    def lookup(name: str, depth: int) -> str | None:
+        value = context[name]
+        if depth >= MAX_TEMPLATE_DEPTH or not isinstance(value, str | int | float | bool):
+            return None
+        resolved = str(resolve(value, depth + 1))
+        return None if "{{" in resolved else resolved
+
+    def resolve(value: object, depth: int) -> object:
+        if isinstance(value, str):
+
+            def substitute(match: re.Match) -> str:
+                found = lookup(match[1], depth) if match[1] in context else None
+                return match[0] if found is None else found
+
+            return JINJA_VAR.sub(substitute, value)
+        if isinstance(value, list):
+            return [resolve(item, depth) for item in value]
+        if isinstance(value, dict):
+            return {key: resolve(item, depth) for key, item in value.items()}
+        return value
+
+    return {key: resolve(value, 0) for key, value in values.items()}
+
 
 @contextlib.asynccontextmanager
 async def httpx_fetcher() -> AsyncGenerator[FetchText]:
@@ -183,6 +221,27 @@ class AnsibleCMDB:
 
             inventory_tmp_dict["hosts"] = await self._build_cmdb_hosts(inventory_tmp_dict, inventory_yaml, fetch_text)
             inventory_tmp_dict["groups"] = await self._build_cmdb_groups(inventory_tmp_dict, inventory_yaml, fetch_text)
+            self._resolve_templates(inventory_tmp_dict["hosts"], inventory_tmp_dict["groups"])
+
+    def _resolve_templates(self, hosts: dict, groups: dict) -> None:
+        """Substitute `{{ var }}` references in place, with roughly Ansible's precedence: all < group < host.
+
+        A host is resolved against its groups' vars, but only its own vars are rewritten — group vars aren't
+        merged into what the host page shows.
+        """
+        all_vars = groups.get("all", {})
+        resolved_groups = {
+            group: resolve_vars(group_vars, all_vars | group_vars) for group, group_vars in groups.items()
+        }
+
+        for host_data in hosts.values():
+            context = dict(all_vars)
+            for group in host_data["groups"]:
+                context |= groups.get(group, {})
+            context |= host_data["vars"]
+            host_data["vars"] = resolve_vars(host_data["vars"], context)
+
+        groups.update(resolved_groups)
 
     def get_inventory(self, inventory: str) -> dict:
         """Get an inventory. Empty dict if there is no such inventory."""
@@ -198,7 +257,8 @@ class AnsibleCMDB:
 
     async def _build_cmdb_groups(self, inventory_dict: dict, inventory_yaml: dict, fetch_text: FetchText) -> dict:
         """Build the CMDB groups from the already-fetched inventory."""
-        groups: dict = {group: {} for group in inventory_yaml}
+        # 'all' always has vars, whether or not the inventory names it as a group — group_vars/all.yml.
+        groups: dict = {"all": {}} | {group: {} for group in inventory_yaml}
 
         await asyncio.gather(
             *[
